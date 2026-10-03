@@ -16,7 +16,7 @@
     const { useState, useEffect } = React;
 
     // URL Web App Terbaru Anda
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxfwnWpORFTBAwvM6pY7x-aDbc3hVLLS6KgLmnVNz1D_uANwh7XM_Da09GhK14jHRG7/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxYPqWNAihfEdlrDaqMtKhMkqS--3jZZAIc3rBkDjlerRakIQugzuQw3FUb1c8DDcX01g/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -32,6 +32,7 @@
       const [activeTab, setActiveTab] = useState('dashboard');
       const [searchTerm, setSearchTerm] = useState('');
       const [loading, setLoading] = useState(false);
+      const [toastMsg, setToastMsg] = useState('');
 
       const [transactions, setTransactions] = useState([]);
       
@@ -48,15 +49,20 @@
         localStorage.setItem('perak_categories_v1', JSON.stringify(categories));
       }, [categories]);
 
-      // LOAD DATA FROM GOOGLE SHEETS
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(''), 4000);
+      };
+
+      // FETCH DATA DARI GOOGLE SHEETS
       const loadDataFromSheets = () => {
         setLoading(true);
-        fetch(SCRIPT_URL)
+        fetch(SCRIPT_URL + '?t=' + new Date().getTime())
           .then(res => res.json())
           .then(data => {
             if (Array.isArray(data) && data.length > 1) {
               const formattedTrx = data.slice(1).map((row) => ({
-                id: row[0] || '',
+                id: String(row[0] || '').trim(),
                 tanggalAmbil: row[1] || '',
                 kategoriName: row[2] || '',
                 pengambil: row[3] || '',
@@ -123,7 +129,8 @@
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
       };
 
-      const sendToGoogleSheets = (dataObj) => {
+      // KIRIM DATA DENGAN NO-CORS
+      const sendToGoogleSheets = (dataObj, successMessage) => {
         setLoading(true);
         fetch(SCRIPT_URL, {
           method: 'POST',
@@ -135,38 +142,43 @@
           setTimeout(() => {
             loadDataFromSheets();
             setLoading(false);
-          }, 2000);
+            showToast(successMessage || '✅ Data berhasil disinkronkan ke Google Sheets!');
+          }, 2500);
         })
         .catch(err => {
           console.error("Gagal koneksi:", err);
           setLoading(false);
+          alert('Gagal mengirim data!');
         });
       };
 
       const handleDeleteTransaction = (id) => {
         if (window.confirm(`Yakin ingin menghapus data transaksi ${id} dari Google Sheets?`)) {
-          sendToGoogleSheets({ action: 'DELETE', id: id });
-          alert(`Transaksi ${id} dihapus dari Google Sheets.`);
+          sendToGoogleSheets({ action: 'DELETE', id: id }, `🗑️ Transaksi ${id} berhasil dihapus!`);
         }
       };
 
-      // SIMPAN INPUT PENGAMBILAN
+      // PENGAMBILAN
       const handleSavePengambilan = (e) => {
         e.preventDefault();
         const pengambilFinal = formAmbil.pengambilSelect.trim();
-        if (!pengambilFinal) return alert('Nama pengambil barang harus diisi!');
-        if (!formAmbil.tempatAmbil.trim()) return alert('Nama tempat pengambilan harus diisi!');
-        if (!formAmbil.lokasiAmbil.trim()) return alert('Lokasi/daerah pengambilan harus diisi!');
+        if (!pengambilFinal || !formAmbil.tempatAmbil.trim() || !formAmbil.lokasiAmbil.trim()) {
+          return alert('Semua bidang sumber & lokasi harus diisi!');
+        }
 
         const kotor = parseFloat(formAmbil.jumlahKotor) || 0;
         const hargaBeli = parseFloat(formAmbil.hargaBeliSatuan) || 0;
         const transport = parseFloat(formAmbil.biayaTransport) || 0;
 
-        if (kotor <= 0 || hargaBeli <= 0) return alert('Jumlah barang kotor dan harga beli harus lebih dari 0!');
+        if (kotor <= 0 || hargaBeli <= 0) return alert('Jumlah kotor dan harga beli harus > 0!');
 
         const selectedCat = categories.find(c => c.code === formAmbil.kategoriCode) || { code: 'A', name: 'Umum' };
+        
+        const nextNum = transactions.length + 1;
+        const newId = `TRX-${String(nextNum).padStart(3, '0')}`;
+
         const newTrx = {
-          id: `TRX-${String(transactions.length + 1).padStart(3, '0')}`,
+          id: newId,
           tanggalAmbil: formAmbil.tanggal,
           kategoriName: `[${selectedCat.code}] ${selectedCat.name}`,
           pengambil: pengambilFinal,
@@ -186,23 +198,19 @@
           status: 'MENUNGGU_OLAH'
         };
 
-        sendToGoogleSheets(newTrx);
-        alert(`Data pengambilan ${newTrx.id} disimpan! Status: MENUNGGU OLAH`);
+        sendToGoogleSheets(newTrx, `🎉 Transaksi ${newId} berhasil dikirim ke Google Sheets!`);
         setFormAmbil({ ...formAmbil, tempatAmbil: '', lokasiAmbil: '', jumlahKotor: '', hargaBeliSatuan: '', biayaTransport: '' });
         setActiveTab('dashboard');
       };
 
-      // SIMPAN INPUT PENGOLAHAN (UPDATE BARIS YANG SAMA)
+      // PENGOLAHAN (UPDATE BARIS LAMA)
       const handleSavePengolahan = (e) => {
         e.preventDefault();
         if (!formOlah.trxId) return alert('Pilih transaksi yang akan diolah!');
-        const pengolahFinal = formOlah.pengolahSelect.trim();
-        if (!pengolahFinal) return alert('Nama pengolah harus diisi!');
-
+        
         const murni = parseFloat(formOlah.jumlahMurni) || 0;
         const olah = parseFloat(formOlah.biayaOlah) || 0;
-
-        if (murni <= 0) return alert('Jumlah hasil perak murni harus lebih dari 0!');
+        if (murni <= 0) return alert('Jumlah murni harus > 0!');
 
         const t = transactions.find(x => x.id === formOlah.trxId);
         if (!t) return;
@@ -211,20 +219,19 @@
 
         const updatedTrx = {
           ...t,
-          pengolah: pengolahFinal,
+          pengolah: formOlah.pengolahSelect.trim(),
           jumlahMurni: murni,
           biayaOlah: olah,
           efisiensi: efisiensi,
           status: 'SELESAI_OLAH'
         };
 
-        sendToGoogleSheets(updatedTrx);
-        alert(`Pemurnian ${t.id} berhasil diupdate! Status: SELESAI OLAH`);
+        sendToGoogleSheets(updatedTrx, `🧪 Pemurnian ${t.id} berhasil di-update! Status: SELESAI OLAH`);
         setFormOlah({ trxId: '', pengolahSelect: 'Zaenal', jumlahMurni: '', biayaOlah: '' });
         setActiveTab('dashboard');
       };
 
-      // SIMPAN INPUT PENJUALAN (UPDATE BARIS YANG SAMA & HITUNG UNTUNG BERSIH)
+      // PENJUALAN
       const handleSavePenjualan = (e) => {
         e.preventDefault();
         if (!formJual.trxId) return alert('Pilih transaksi yang akan dijual!');
@@ -232,15 +239,12 @@
         const hargaJual = parseFloat(formJual.hargaJualSatuan) || 0;
         const jmlJual = parseFloat(formJual.jumlahJual) || 0;
 
-        if (hargaJual <= 0 || jmlJual <= 0) return alert('Harga jual dan jumlah gram harus lebih dari 0!');
-        if (!formJual.tokoPembeli.trim()) return alert('Nama Toko / Pembeli Tujuan harus diisi!');
-        if (!formJual.lokasiPenjualan.trim()) return alert('Daerah / Wilayah Penjualan harus diisi!');
+        if (hargaJual <= 0 || jmlJual <= 0) return alert('Harga dan jumlah jual harus > 0!');
 
         const t = transactions.find(x => x.id === formJual.trxId);
         if (!t) return;
 
         const totalJual = jmlJual * hargaJual;
-        // LABA BERSIH = TOTAL JUAL - MODAL BELI - BIAYA TRANSPORT - BIAYA OLAH
         const totalUntung = totalJual - t.totalBeli - (t.biayaTransport || 0) - (t.biayaOlah || 0);
 
         const updatedTrx = {
@@ -252,33 +256,31 @@
           status: 'TERJUAL'
         };
 
-        sendToGoogleSheets(updatedTrx);
-        alert(`Penjualan ${t.id} selesai! Transaksi diperbarui di Google Sheets.`);
+        sendToGoogleSheets(updatedTrx, `💰 Penjualan ${t.id} berhasil diperbarui di Google Sheets!`);
         setFormJual({ trxId: '', tanggalJual: new Date().toISOString().split('T')[0], hargaJualSatuan: '', jumlahJual: '', tokoPembeli: '', lokasiPenjualan: '' });
         setActiveTab('dashboard');
       };
 
       const handleAddCategory = (e) => {
         e.preventDefault();
-        if (!newCatCode.trim() || !newCatName.trim()) return alert('Kode dan Nama Kategori harus diisi!');
+        if (!newCatCode.trim() || !newCatName.trim()) return;
         const codeUpper = newCatCode.trim().toUpperCase();
         if (categories.some(c => c.code === codeUpper)) return alert('Kode Kategori sudah ada!');
 
         setCategories([...categories, { code: codeUpper, name: newCatName.trim() }]);
         setNewCatCode('');
         setNewCatName('');
-        alert('Kategori barang baru berhasil ditambahkan!');
       };
 
       const handleSaveEditCategory = (code) => {
-        if (!editCatNameText.trim()) return alert('Nama kategori tidak boleh kosong!');
+        if (!editCatNameText.trim()) return;
         setCategories(categories.map(c => c.code === code ? { ...c, name: editCatNameText.trim() } : c));
         setEditingCatCode(null);
         setEditCatNameText('');
       };
 
       const handleDeleteCategory = (code) => {
-        if (window.confirm(`Yakin ingin menghapus varian kategori [${code}]?`)) {
+        if (window.confirm(`Hapus kategori [${code}]?`)) {
           setCategories(categories.filter(c => c.code !== code));
         }
       };
@@ -294,9 +296,7 @@
           t.pengambil.toLowerCase().includes(term) ||
           (t.tempatAmbil && t.tempatAmbil.toLowerCase().includes(term)) ||
           (t.lokasiAmbil && t.lokasiAmbil.toLowerCase().includes(term)) ||
-          (t.pengolah && t.pengolah.toLowerCase().includes(term)) ||
-          (t.tokoPembeli && t.tokoPembeli.toLowerCase().includes(term)) ||
-          (t.lokasiPenjualan && t.lokasiPenjualan.toLowerCase().includes(term))
+          (t.pengolah && t.pengolah.toLowerCase().includes(term))
         );
       });
 
@@ -307,14 +307,32 @@
       const totalLabaBersih = transactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalUntung || 0), 0);
 
       return (
-        <div className="min-h-screen bg-slate-100 text-slate-800 font-sans">
-          <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
+        <div className="min-h-screen bg-slate-100 text-slate-800 font-sans relative">
+          
+          {/* TOAST POPUP PROSES SINKRONISASI SUKSES */}
+          {toastMsg && (
+            <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-emerald-400 border border-emerald-500 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-bounce">
+              <span className="text-lg">✨</span>
+              <p className="text-xs font-bold">{toastMsg}</p>
+            </div>
+          )}
+
+          {/* OVERLAY LOADING SPINNER */}
+          {loading && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-white">
+              <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+              <p className="text-sm font-bold tracking-wider">Menghubungkan ke Google Sheets...</p>
+              <span className="text-xs text-slate-300 mt-1">Sistem sedang memperbarui baris data transaksi</span>
+            </div>
+          )}
+
+          <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
             <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex items-center space-x-3">
                 <div className="bg-amber-500 text-slate-900 p-2 rounded-lg font-black text-xl">Ag</div>
                 <div>
                   <h1 className="text-xl font-bold tracking-wide">Refining Perak System</h1>
-                  <p className="text-xs text-emerald-400 font-semibold">🟢 Terhubung ke Google Sheets (Data Single Line)</p>
+                  <p className="text-xs text-emerald-400 font-semibold">🟢 Single-Line Update Auto Sync</p>
                 </div>
               </div>
 
@@ -322,7 +340,7 @@
                 onClick={loadDataFromSheets}
                 className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded border border-slate-700 transition flex items-center gap-1"
               >
-                🔄 Refresh Data Sheets
+                🔄 Sync Ulang Data
               </button>
             </div>
 
@@ -373,12 +391,6 @@
           </header>
 
           <main className="max-w-7xl mx-auto px-4 py-8">
-            {loading && (
-              <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-3 mb-4 rounded text-xs font-semibold animate-pulse">
-                ⏳ Sedang memproses data dari/ke Google Sheets... Mohon tunggu sejenak.
-              </div>
-            )}
-
             {/* TAB 1: PENGAMBILAN */}
             {activeTab === 'pengambilan' && (
               <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
@@ -444,7 +456,7 @@
                       <input type="number" required value={formAmbil.hargaBeliSatuan} onChange={(e) => setFormAmbil({ ...formAmbil, hargaBeliSatuan: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Biaya Operasional / Transport (Rp)</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Biaya Transport (Rp)</label>
                       <input type="number" placeholder="e.g. 50000" value={formAmbil.biayaTransport} onChange={(e) => setFormAmbil({ ...formAmbil, biayaTransport: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                   </div>
@@ -465,7 +477,7 @@
                 <form onSubmit={handleSavePengolahan} className="p-6 space-y-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Pilih Transaksi Barang Masuk</label>
-                    <select required value={formOlah.trxId} onChange={(e) => setFormOlah({ ...formOlah, trxId: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                    <select required value={formOlah.trxId} onChange={(e) => setFormOlah({ ...formOlah, trxId: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm bg-white font-bold">
                       <option value="">-- Pilih Antrean Transaksi --</option>
                       {pendingOlahList.map((t) => (
                         <option key={t.id} value={t.id}>{t.id} | {t.kategoriName} | Kotor: {t.jumlahKotor}g ({t.tempatAmbil})</option>
@@ -482,12 +494,12 @@
                       <input type="number" step="0.01" required value={formOlah.jumlahMurni} onChange={(e) => setFormOlah({ ...formOlah, jumlahMurni: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Biaya Pengolahan / Pemurnian (Rp)</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Biaya Pengolahan (Rp)</label>
                       <input type="number" placeholder="e.g. 100000" value={formOlah.biayaOlah} onChange={(e) => setFormOlah({ ...formOlah, biayaOlah: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                   </div>
                   <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow">
-                    Simpan Pemurnian ➔
+                    Update Pemurnian ➔
                   </button>
                 </form>
               </div>
@@ -505,7 +517,7 @@
                     <select required value={formJual.trxId} onChange={(e) => {
                       const selected = transactions.find(t => t.id === e.target.value);
                       setFormJual({ ...formJual, trxId: e.target.value, jumlahJual: selected ? selected.jumlahMurni : '' });
-                    }} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
+                    }} className="w-full px-3 py-2 border rounded-lg text-sm bg-white font-bold">
                       <option value="">-- Pilih Perak Siap Jual --</option>
                       {pendingJualList.map((t) => (
                         <option key={t.id} value={t.id}>{t.id} | {t.kategoriName} | Perak Murni: {t.jumlahMurni}g</option>
@@ -567,7 +579,7 @@
                     <h3 className="font-bold text-slate-800">Daftar Transaksi Single Line (Google Sheets)</h3>
                     <input
                       type="text"
-                      placeholder="🔍 Cari kode, tempat, pembeli, lokasi..."
+                      placeholder="🔍 Cari kode, tempat, pengolah..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="px-3 py-1.5 border rounded-lg text-xs outline-none w-full md:w-64"
@@ -616,8 +628,8 @@
                               <td className="px-3 py-3 text-right font-mono">{t.jumlahKotor}</td>
                               <td className="px-3 py-3 text-right font-mono">{formatRupiah(t.totalBeli)}</td>
                               <td className="px-3 py-3 text-right font-mono text-slate-500">{formatRupiah(t.biayaTransport)}</td>
-                              <td className="px-3 py-3">{t.pengolah}</td>
-                              <td className="px-3 py-3 text-right font-mono">{t.jumlahMurni}</td>
+                              <td className="px-3 py-3 font-semibold">{t.pengolah}</td>
+                              <td className="px-3 py-3 text-right font-mono font-bold text-blue-600">{t.jumlahMurni}</td>
                               <td className="px-3 py-3 text-right font-mono text-slate-500">{formatRupiah(t.biayaOlah)}</td>
                               <td className="px-3 py-3 text-center font-bold text-blue-600">{t.efisiensi}%</td>
                               <td className="px-3 py-3">
@@ -689,7 +701,7 @@
                             </div>
                             <div className="flex items-center gap-2">
                               <button onClick={() => { setEditingCatCode(cat.code); setEditCatNameText(cat.name); }} className="text-blue-600 text-xs font-bold px-2 py-1 bg-blue-50 rounded">✏ Edit</button>
-                              <button onClick={() => handleDeleteCategory(cat.code)} className="text-red-500 text-xs font-bold px-2 py-1 bg-red-50 rounded">🗑️️ Hapus</button>
+                              <button onClick={() => handleDeleteCategory(cat.code)} className="text-red-500 text-xs font-bold px-2 py-1 bg-red-50 rounded">🗑️ Hapus</button>
                             </div>
                           </>
                         )}
