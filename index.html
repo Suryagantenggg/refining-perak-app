@@ -15,8 +15,8 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    // URL Web App Terbaru
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbye1QKzH3DNLxVbgDH0TZ6-vQUhUlvulZ141fHzMEn7xF4nWVQpKtieKfJIMjW7ejoRrw/exec";
+    // URL Web App Terbaru Anda
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw4k_fNyHf5k9Cfk8NhPmPpOP0VoXo9HFmNS-6kdfjql40GZBJhMrXzKYoRGVO6yzqA1w/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -48,7 +48,7 @@
         localStorage.setItem('perak_categories_v1', JSON.stringify(categories));
       }, [categories]);
 
-      // LOAD DATA FROM GOOGLE SHEETS
+      // LOAD DATA DARI GOOGLE SHEETS
       const loadDataFromSheets = () => {
         setLoading(true);
         fetch(SCRIPT_URL)
@@ -119,7 +119,7 @@
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
       };
 
-      // KIRIM DATA KE GOOGLE SHEETS DENGAN NO-CORS
+      // KIRIM DATA KE GOOGLE SHEETS DENGAN MODE NO-CORS
       const sendToGoogleSheets = (dataObj) => {
         setLoading(true);
         fetch(SCRIPT_URL, {
@@ -138,6 +138,14 @@
           console.error("Gagal koneksi:", err);
           setLoading(false);
         });
+      };
+
+      // HAPUS TRANSAKSI
+      const handleDeleteTransaction = (id) => {
+        if (window.confirm(`Yakin ingin menghapus data transaksi ${id} dari Google Sheets?`)) {
+          sendToGoogleSheets({ action: 'DELETE', id: id });
+          alert(`Permintaan hapus transaksi ${id} dikirim ke Google Sheets.`);
+        }
       };
 
       const handleSavePengambilan = (e) => {
@@ -509,7 +517,7 @@
               </div>
             )}
 
-            {/* TAB 4: DASHBOARD & REKAP */}
+            {/* TAB 4: DASHBOARD & REKAP LAPORAN */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -562,12 +570,13 @@
                           <th className="px-3 py-3 text-right">Total Jual</th>
                           <th className="px-3 py-3 text-right">Untung Bersih</th>
                           <th className="px-3 py-3 text-center">Status</th>
+                          <th className="px-3 py-3 text-center">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {filteredTransactions.length === 0 ? (
                           <tr>
-                            <td colSpan="14" className="text-center py-6 text-slate-400">Belum ada data di Google Sheets. Silakan input pengambilan baru.</td>
+                            <td colSpan="15" className="text-center py-6 text-slate-400">Belum ada data di Google Sheets. Silakan input pengambilan baru.</td>
                           </tr>
                         ) : (
                           filteredTransactions.map((t, idx) => (
@@ -602,6 +611,15 @@
                                 }`}>
                                   {t.status}
                                 </span>
+                              </td>
+                              <td className="px-3 py-3 text-center">
+                                <button
+                                  onClick={() => handleDeleteTransaction(t.id)}
+                                  className="text-red-500 hover:text-red-700 font-bold px-2 py-1 bg-red-50 hover:bg-red-100 rounded text-xs"
+                                  title="Hapus Transaksi Ini"
+                                >
+                                  🗑️ Hapus
+                                </button>
                               </td>
                             </tr>
                           ))
