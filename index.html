@@ -60,16 +60,18 @@
                 tanggalAmbil: row[1] || '',
                 kategoriName: row[2] || '',
                 pengambil: row[3] || '',
-                jumlahKotor: parseFloat(row[4]) || 0,
-                totalBeli: parseFloat(row[5]) || 0,
-                pengolah: row[6] || '-',
-                jumlahMurni: parseFloat(row[7]) || 0,
-                efisiensi: parseFloat(row[8]) || 0,
-                tokoPembeli: row[9] || '-',
-                lokasiPenjualan: row[10] || '-',
-                totalJual: parseFloat(row[11]) || 0,
-                totalUntung: parseFloat(row[12]) || 0,
-                status: row[13] || 'MENUNGGU_OLAH'
+                tempatAmbil: row[4] || '-',
+                lokasiAmbil: row[5] || '-',
+                jumlahKotor: parseFloat(row[6]) || 0,
+                totalBeli: parseFloat(row[7]) || 0,
+                pengolah: row[8] || '-',
+                jumlahMurni: parseFloat(row[9]) || 0,
+                efisiensi: parseFloat(row[10]) || 0,
+                tokoPembeli: row[11] || '-',
+                lokasiPenjualan: row[12] || '-',
+                totalJual: parseFloat(row[13]) || 0,
+                totalUntung: parseFloat(row[14]) || 0,
+                status: row[15] || 'MENUNGGU_OLAH'
               }));
               setTransactions(formattedTrx);
             } else {
@@ -91,6 +93,8 @@
       const [formAmbil, setFormAmbil] = useState({
         tanggal: new Date().toISOString().split('T')[0],
         pengambilSelect: 'Andi',
+        tempatAmbil: '',
+        lokasiAmbil: '',
         kategoriCode: categories[0] ? categories[0].code : 'A',
         jumlahKotor: '',
         hargaBeliSatuan: '',
@@ -142,6 +146,8 @@
         e.preventDefault();
         const pengambilFinal = formAmbil.pengambilSelect.trim();
         if (!pengambilFinal) return alert('Nama pengambil barang harus diisi!');
+        if (!formAmbil.tempatAmbil.trim()) return alert('Nama tempat pengambilan harus diisi!');
+        if (!formAmbil.lokasiAmbil.trim()) return alert('Lokasi/daerah pengambilan harus diisi!');
 
         const kotor = parseFloat(formAmbil.jumlahKotor) || 0;
         const hargaBeli = parseFloat(formAmbil.hargaBeliSatuan) || 0;
@@ -154,6 +160,8 @@
           tanggalAmbil: formAmbil.tanggal,
           kategoriName: `[${selectedCat.code}] ${selectedCat.name}`,
           pengambil: pengambilFinal,
+          tempatAmbil: formAmbil.tempatAmbil.trim(),
+          lokasiAmbil: formAmbil.lokasiAmbil.trim(),
           jumlahKotor: kotor,
           totalBeli: kotor * hargaBeli,
           pengolah: '-',
@@ -168,7 +176,7 @@
 
         sendToGoogleSheets(newTrx);
         alert(`Transaksi ${newTrx.id} dikirim ke Google Sheets!`);
-        setFormAmbil({ ...formAmbil, jumlahKotor: '', hargaBeliSatuan: '', biayaTransport: '' });
+        setFormAmbil({ ...formAmbil, tempatAmbil: '', lokasiAmbil: '', jumlahKotor: '', hargaBeliSatuan: '', biayaTransport: '' });
         setActiveTab('dashboard');
       };
 
@@ -234,7 +242,7 @@
         setActiveTab('dashboard');
       };
 
-      // HANDLER KATEGORI (TAMBAH, EDIT, HAPUS)
+      // HANDLER KATEGORI
       const handleAddCategory = (e) => {
         e.preventDefault();
         if (!newCatCode.trim() || !newCatName.trim()) return alert('Kode dan Nama Kategori harus diisi!');
@@ -269,6 +277,8 @@
           t.id.toLowerCase().includes(term) ||
           t.kategoriName.toLowerCase().includes(term) ||
           t.pengambil.toLowerCase().includes(term) ||
+          (t.tempatAmbil && t.tempatAmbil.toLowerCase().includes(term)) ||
+          (t.lokasiAmbil && t.lokasiAmbil.toLowerCase().includes(term)) ||
           (t.pengolah && t.pengolah.toLowerCase().includes(term)) ||
           (t.tokoPembeli && t.tokoPembeli.toLowerCase().includes(term)) ||
           (t.lokasiPenjualan && t.lokasiPenjualan.toLowerCase().includes(term))
@@ -354,11 +364,12 @@
               </div>
             )}
 
-            {/* TAB 1: PENGAMBILAN */}
+            {/* TAB 1: PENGAMBILAN DENGAN INPUT LOKASI & TEMPAT */}
             {activeTab === 'pengambilan' && (
               <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
                 <div className="bg-slate-900 text-white p-6">
                   <h2 className="text-lg font-bold">📥 Input Pengambilan Barang Mentah</h2>
+                  <p className="text-xs text-slate-400 mt-1">Formulir khusus tim lapangan untuk menginput pembelian & sumber asal barang.</p>
                 </div>
                 <form onSubmit={handleSavePengambilan} className="p-6 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -367,10 +378,40 @@
                       <input type="date" required value={formAmbil.tanggal} onChange={(e) => setFormAmbil({ ...formAmbil, tanggal: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Pengambil</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Pengambil Barang</label>
                       <input type="text" required placeholder="e.g. Andi" value={formAmbil.pengambilSelect} onChange={(e) => setFormAmbil({ ...formAmbil, pengambilSelect: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                   </div>
+
+                  {/* KETERANGAN TEMPAT & LOKASI PENGAMBILAN */}
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">📍 Sumber & Lokasi Pengambilan</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Diambil Dari / Nama Tempat</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. PT Surya Jaya / Pak Slamet"
+                          value={formAmbil.tempatAmbil}
+                          onChange={(e) => setFormAmbil({ ...formAmbil, tempatAmbil: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Daerah / Wilayah Pengambilan</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Cikarang, Bekasi"
+                          value={formAmbil.lokasiAmbil}
+                          onChange={(e) => setFormAmbil({ ...formAmbil, lokasiAmbil: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Kategori Jenis Barang</label>
                     <select value={formAmbil.kategoriCode} onChange={(e) => setFormAmbil({ ...formAmbil, kategoriCode: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
@@ -379,6 +420,7 @@
                       ))}
                     </select>
                   </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Jumlah Kotor (Gram)</label>
@@ -389,6 +431,7 @@
                       <input type="number" required value={formAmbil.hargaBeliSatuan} onChange={(e) => setFormAmbil({ ...formAmbil, hargaBeliSatuan: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                   </div>
+
                   <button type="submit" disabled={loading} className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-lg shadow">
                     Simpan ke Google Sheets ➔
                   </button>
@@ -408,7 +451,7 @@
                     <select required value={formOlah.trxId} onChange={(e) => setFormOlah({ ...formOlah, trxId: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
                       <option value="">-- Pilih Antrean Transaksi --</option>
                       {pendingOlahList.map((t) => (
-                        <option key={t.id} value={t.id}>{t.id} | {t.kategoriName} | Kotor: {t.jumlahKotor}g</option>
+                        <option key={t.id} value={t.id}>{t.id} | {t.kategoriName} | Kotor: {t.jumlahKotor}g ({t.tempatAmbil})</option>
                       ))}
                     </select>
                   </div>
@@ -473,7 +516,7 @@
               </div>
             )}
 
-            {/* TAB 4: DASHBOARD & REKAP */}
+            {/* TAB 4: DASHBOARD & REKAP LAPORAN */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -501,7 +544,7 @@
                     <h3 className="font-bold text-slate-800">Daftar Transaksi (Google Sheets)</h3>
                     <input
                       type="text"
-                      placeholder="🔍 Cari kode, pembeli, lokasi..."
+                      placeholder="🔍 Cari kode, tempat, pembeli, lokasi..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="px-3 py-1.5 border rounded-lg text-xs outline-none w-full md:w-64"
@@ -516,6 +559,7 @@
                           <th className="px-3 py-3">Tanggal</th>
                           <th className="px-3 py-3">Kategori</th>
                           <th className="px-3 py-3">Pengambil</th>
+                          <th className="px-3 py-3">Diambil Dari & Lokasi</th>
                           <th className="px-3 py-3 text-right">Kotor (g)</th>
                           <th className="px-3 py-3 text-right">Total Beli</th>
                           <th className="px-3 py-3">Pengolah</th>
@@ -530,7 +574,7 @@
                       <tbody className="divide-y divide-slate-100">
                         {filteredTransactions.length === 0 ? (
                           <tr>
-                            <td colSpan="13" className="text-center py-6 text-slate-400">Belum ada data di Google Sheets. Silakan input pengambilan baru.</td>
+                            <td colSpan="14" className="text-center py-6 text-slate-400">Belum ada data di Google Sheets. Silakan input pengambilan baru.</td>
                           </tr>
                         ) : (
                           filteredTransactions.map((t, idx) => (
@@ -539,6 +583,10 @@
                               <td className="px-3 py-3">{t.tanggalAmbil}</td>
                               <td className="px-3 py-3 font-semibold text-slate-600">{t.kategoriName}</td>
                               <td className="px-3 py-3">{t.pengambil}</td>
+                              <td className="px-3 py-3">
+                                <p className="font-semibold text-slate-800">{t.tempatAmbil || '-'}</p>
+                                <p className="text-[10px] text-slate-500">📍 {t.lokasiAmbil || '-'}</p>
+                              </td>
                               <td className="px-3 py-3 text-right font-mono">{t.jumlahKotor}</td>
                               <td className="px-3 py-3 text-right font-mono">{formatRupiah(t.totalBeli)}</td>
                               <td className="px-3 py-3">{t.pengolah}</td>
@@ -572,100 +620,39 @@
               </div>
             )}
 
-            {/* TAB 5: KELOLA VARIAN JENIS BARANG (TAMBAH & EDIT) */}
+            {/* TAB 5: KELOLA VARIAN JENIS BARANG */}
             {activeTab === 'kategori' && (
               <div className="max-w-3xl mx-auto space-y-6">
-                
-                {/* FORM TAMBAH VARIAN BARU */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                  <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-                    ➕ Tambah Varian Jenis Barang Baru
-                  </h3>
-                  <p className="text-xs text-slate-500 mb-4">Tambahkan kategori jenis barang baru agar muncul di pilihan form input.</p>
-
+                  <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">➕ Tambah Varian Jenis Barang Baru</h3>
                   <form onSubmit={handleAddCategory} className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="text"
-                      placeholder="Kode (e.g. H)"
-                      required
-                      value={newCatCode}
-                      onChange={(e) => setNewCatCode(e.target.value)}
-                      className="w-full sm:w-28 px-3 py-2 border rounded-lg text-sm uppercase font-bold outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Nama Varian Barang (e.g. Perak Batangan 999)"
-                      required
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      className="flex-1 px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                    <button
-                      type="submit"
-                      className="bg-amber-500 hover:bg-amber-600 text-slate-900 px-5 py-2 rounded-lg text-sm font-bold whitespace-nowrap"
-                    >
-                      + Tambah Varian
-                    </button>
+                    <input type="text" placeholder="Kode (e.g. H)" required value={newCatCode} onChange={(e) => setNewCatCode(e.target.value)} className="w-full sm:w-28 px-3 py-2 border rounded-lg text-sm uppercase font-bold outline-none" />
+                    <input type="text" placeholder="Nama Varian Barang" required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 px-3 py-2 border rounded-lg text-sm outline-none" />
+                    <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-900 px-5 py-2 rounded-lg text-sm font-bold whitespace-nowrap">+ Tambah Varian</button>
                   </form>
                 </div>
 
-                {/* DAFTAR & EDIT VARIAN CATEGORIES */}
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                  <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-                    📋 Daftar Varian Jenis Barang
-                  </h3>
-                  <p className="text-xs text-slate-500 mb-4">Anda dapat mengubah nama varian atau menghapus varian yang tidak terpakai.</p>
-
+                  <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">📋 Daftar Varian Jenis Barang</h3>
                   <div className="divide-y divide-slate-100 border rounded-lg overflow-hidden">
                     {categories.map((cat) => (
                       <div key={cat.code} className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50 transition">
                         {editingCatCode === cat.code ? (
                           <div className="flex items-center gap-2 flex-1">
                             <span className="font-bold text-xs bg-slate-200 px-2.5 py-1 rounded">[{cat.code}]</span>
-                            <input
-                              type="text"
-                              value={editCatNameText}
-                              onChange={(e) => setEditCatNameText(e.target.value)}
-                              className="flex-1 px-2.5 py-1 border rounded text-xs outline-none focus:ring-2 focus:ring-amber-500"
-                            />
-                            <button
-                              onClick={() => handleSaveEditCategory(cat.code)}
-                              className="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold"
-                            >
-                              Simpan
-                            </button>
-                            <button
-                              onClick={() => setEditingCatCode(null)}
-                              className="bg-slate-300 text-slate-700 px-3 py-1 rounded text-xs font-bold"
-                            >
-                              Batal
-                            </button>
+                            <input type="text" value={editCatNameText} onChange={(e) => setEditCatNameText(e.target.value)} className="flex-1 px-2.5 py-1 border rounded text-xs outline-none" />
+                            <button onClick={() => handleSaveEditCategory(cat.code)} className="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold">Simpan</button>
+                            <button onClick={() => setEditingCatCode(null)} className="bg-slate-300 text-slate-700 px-3 py-1 rounded text-xs font-bold">Batal</button>
                           </div>
                         ) : (
                           <>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs bg-amber-100 text-amber-800 px-2.5 py-1 rounded">
-                                [{cat.code}]
-                              </span>
+                              <span className="font-bold text-xs bg-amber-100 text-amber-800 px-2.5 py-1 rounded">[{cat.code}]</span>
                               <span className="text-sm font-semibold text-slate-700">{cat.name}</span>
                             </div>
-
                             <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => {
-                                  setEditingCatCode(cat.code);
-                                  setEditCatNameText(cat.name);
-                                }}
-                                className="text-blue-600 hover:text-blue-800 text-xs font-bold px-2 py-1 bg-blue-50 hover:bg-blue-100 rounded"
-                              >
-                                ✏️️ Edit
-                              </button>
-                              <button
-                                onClick={() => handleDeleteCategory(cat.code)}
-                                className="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-1 bg-red-50 hover:bg-red-100 rounded"
-                              >
-                                🗑️ Hapus
-                              </button>
+                              <button onClick={() => { setEditingCatCode(cat.code); setEditCatNameText(cat.name); }} className="text-blue-600 text-xs font-bold px-2 py-1 bg-blue-50 rounded">✏ Edit</button>
+                              <button onClick={() => handleDeleteCategory(cat.code)} className="text-red-500 text-xs font-bold px-2 py-1 bg-red-50 rounded">🗑️ Hapus</button>
                             </div>
                           </>
                         )}
@@ -673,7 +660,6 @@
                     ))}
                   </div>
                 </div>
-
               </div>
             )}
           </main>
