@@ -15,7 +15,8 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby9BBNvDaN3aV5fZtRgurHLGSVEnIDaMWVZ6R5l4zTe-h0SxiA4Ih05Ou_cx_yM6DkXEw/exec";
+    // URL Web App Terbaru
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbye1QKzH3DNLxVbgDH0TZ6-vQUhUlvulZ141fHzMEn7xF4nWVQpKtieKfJIMjW7ejoRrw/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -34,7 +35,6 @@
 
       const [transactions, setTransactions] = useState([]);
       
-      // State Kelola Kategori Jenis Barang
       const [categories, setCategories] = useState(() => {
         const saved = localStorage.getItem('perak_categories_v1');
         return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
@@ -48,7 +48,7 @@
         localStorage.setItem('perak_categories_v1', JSON.stringify(categories));
       }, [categories]);
 
-      // SINKRONISASI DATA DARI GOOGLE SHEETS
+      // LOAD DATA FROM GOOGLE SHEETS
       const loadDataFromSheets = () => {
         setLoading(true);
         fetch(SCRIPT_URL)
@@ -89,7 +89,6 @@
         loadDataFromSheets();
       }, []);
 
-      // Form States
       const [formAmbil, setFormAmbil] = useState({
         tanggal: new Date().toISOString().split('T')[0],
         pengambilSelect: 'Andi',
@@ -97,15 +96,13 @@
         lokasiAmbil: '',
         kategoriCode: categories[0] ? categories[0].code : 'A',
         jumlahKotor: '',
-        hargaBeliSatuan: '',
-        biayaTransport: ''
+        hargaBeliSatuan: ''
       });
 
       const [formOlah, setFormOlah] = useState({
         trxId: '',
         pengolahSelect: 'Zaenal',
-        jumlahMurni: '',
-        biayaOlah: ''
+        jumlahMurni: ''
       });
 
       const [formJual, setFormJual] = useState({
@@ -122,26 +119,27 @@
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
       };
 
-      // KIRIM DATA KE GOOGLE SHEETS
+      // KIRIM DATA KE GOOGLE SHEETS DENGAN NO-CORS
       const sendToGoogleSheets = (dataObj) => {
         setLoading(true);
         fetch(SCRIPT_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dataObj)
         })
         .then(() => {
           setTimeout(() => {
             loadDataFromSheets();
-          }, 1500);
+            setLoading(false);
+          }, 2000);
         })
         .catch(err => {
-          alert("Gagal koneksi Google Sheets: " + err);
+          console.error("Gagal koneksi:", err);
           setLoading(false);
         });
       };
 
-      // SIMPAN PENGAMBILAN
       const handleSavePengambilan = (e) => {
         e.preventDefault();
         const pengambilFinal = formAmbil.pengambilSelect.trim();
@@ -175,12 +173,11 @@
         };
 
         sendToGoogleSheets(newTrx);
-        alert(`Transaksi ${newTrx.id} dikirim ke Google Sheets!`);
-        setFormAmbil({ ...formAmbil, tempatAmbil: '', lokasiAmbil: '', jumlahKotor: '', hargaBeliSatuan: '', biayaTransport: '' });
+        alert(`Data pengambilan ${newTrx.id} dikirim ke Google Sheets!`);
+        setFormAmbil({ ...formAmbil, tempatAmbil: '', lokasiAmbil: '', jumlahKotor: '', hargaBeliSatuan: '' });
         setActiveTab('dashboard');
       };
 
-      // SIMPAN PENGOLAHAN
       const handleSavePengolahan = (e) => {
         e.preventDefault();
         if (!formOlah.trxId) return alert('Pilih transaksi yang akan diolah!');
@@ -204,12 +201,11 @@
         };
 
         sendToGoogleSheets(updatedTrx);
-        alert(`Data pemurnian ${t.id} berhasil diperbarui di Google Sheets!`);
-        setFormOlah({ trxId: '', pengolahSelect: 'Zaenal', jumlahMurni: '', biayaOlah: '' });
+        alert(`Pemurnian ${t.id} berhasil diperbarui di Google Sheets!`);
+        setFormOlah({ trxId: '', pengolahSelect: 'Zaenal', jumlahMurni: '' });
         setActiveTab('dashboard');
       };
 
-      // SIMPAN PENJUALAN
       const handleSavePenjualan = (e) => {
         e.preventDefault();
         if (!formJual.trxId) return alert('Pilih transaksi yang akan dijual!');
@@ -242,7 +238,6 @@
         setActiveTab('dashboard');
       };
 
-      // HANDLER KATEGORI
       const handleAddCategory = (e) => {
         e.preventDefault();
         if (!newCatCode.trim() || !newCatName.trim()) return alert('Kode dan Nama Kategori harus diisi!');
@@ -364,12 +359,11 @@
               </div>
             )}
 
-            {/* TAB 1: PENGAMBILAN DENGAN INPUT LOKASI & TEMPAT */}
+            {/* TAB 1: PENGAMBILAN */}
             {activeTab === 'pengambilan' && (
               <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
                 <div className="bg-slate-900 text-white p-6">
                   <h2 className="text-lg font-bold">📥 Input Pengambilan Barang Mentah</h2>
-                  <p className="text-xs text-slate-400 mt-1">Formulir khusus tim lapangan untuk menginput pembelian & sumber asal barang.</p>
                 </div>
                 <form onSubmit={handleSavePengambilan} className="p-6 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -383,7 +377,6 @@
                     </div>
                   </div>
 
-                  {/* KETERANGAN TEMPAT & LOKASI PENGAMBILAN */}
                   <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
                     <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">📍 Sumber & Lokasi Pengambilan</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -516,7 +509,7 @@
               </div>
             )}
 
-            {/* TAB 4: DASHBOARD & REKAP LAPORAN */}
+            {/* TAB 4: DASHBOARD & REKAP */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -620,7 +613,7 @@
               </div>
             )}
 
-            {/* TAB 5: KELOLA VARIAN JENIS BARANG */}
+            {/* TAB 5: KELOLA VARIAN */}
             {activeTab === 'kategori' && (
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
