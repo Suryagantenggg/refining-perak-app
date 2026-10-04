@@ -16,7 +16,7 @@
     const { useState, useEffect } = React;
 
     // URL Web App Terbaru Anda
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwz-bXvDU38dM3hEjcStGmWibH0nSgwISjv8JcVeVRQ7EU5y0K2-RC4wuUJclc68tpO/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzCDKZTtoSKELkp6EU-cFJXG3wV-CcnmG8BzBOh-YLItoLOm0MhN06BvXluH5Dv6Qcf/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -52,23 +52,58 @@
       const [toastMsg, setToastMsg] = useState('');
 
       const [transactions, setTransactions] = useState([]);
-      
-      const [categories, setCategories] = useState(() => {
-        const saved = localStorage.getItem('perak_categories_v1');
-        return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
-      });
+      const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+
       const [newCatCode, setNewCatCode] = useState('');
       const [newCatName, setNewCatName] = useState('');
       const [editingCatCode, setEditingCatCode] = useState(null);
       const [editCatNameText, setEditCatNameText] = useState('');
 
-      useEffect(() => {
-        localStorage.setItem('perak_categories_v1', JSON.stringify(categories));
-      }, [categories]);
-
       const showToast = (msg) => {
         setToastMsg(msg);
         setTimeout(() => setToastMsg(''), 4000);
+      };
+
+      // FETCH CATEGORIES DARI GOOGLE SHEETS
+      const loadCategoriesFromSheets = () => {
+        fetch(SCRIPT_URL + '?type=categories&t=' + new Date().getTime())
+          .then(res => res.json())
+          .then(data => {
+            if (Array.isArray(data) && data.length > 1) {
+              const formattedCats = data.slice(1).map(row => ({
+                code: String(row[0] || '').trim(),
+                name: String(row[1] || '').trim()
+              })).filter(c => c.code && c.name);
+
+              if (formattedCats.length > 0) {
+                setCategories(formattedCats);
+              }
+            } else {
+              saveCategoriesToSheets(DEFAULT_CATEGORIES);
+            }
+          })
+          .catch(err => console.error("Gagal load kategori:", err));
+      };
+
+      const saveCategoriesToSheets = (newCatsList) => {
+        setLoading(true);
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'SAVE_CATEGORIES', categories: newCatsList })
+        })
+        .then(() => {
+          setTimeout(() => {
+            setLoading(false);
+            setCategories(newCatsList);
+            showToast('✅ Varian Barang berhasil disimpan ke Google Sheets!');
+          }, 1500);
+        })
+        .catch(err => {
+          setLoading(false);
+          alert('Gagal menyimpan varian barang!');
+        });
       };
 
       // HANDLE LOGIN
@@ -164,6 +199,8 @@
       const loadDataFromSheets = () => {
         if (!currentUser) return;
         setLoading(true);
+        loadCategoriesFromSheets();
+
         fetch(SCRIPT_URL + '?t=' + new Date().getTime())
           .then(res => res.json())
           .then(data => {
@@ -212,13 +249,13 @@
         pengambilSelect: currentUser ? currentUser.nama : 'Andi',
         tempatAmbil: '',
         lokasiAmbil: '',
-        kategoriCode: categories[0] ? categories[0].code : 'A',
+        kategoriCode: 'A',
         jumlahKotor: '',
         hargaBeliSatuan: '',
         biayaTransport: ''
       });
 
-      // FORM PENGOLAHAN (DENGAN MULTI-SELECT ITEM TRANSAKSI)
+      // FORM PENGOLAHAN (MULTI-SELECT)
       const [formOlah, setFormOlah] = useState({
         selectedTrxIds: [],
         pengolahSelect: currentUser ? currentUser.nama : 'Zaenal',
@@ -282,7 +319,7 @@
 
         if (kotor <= 0 || hargaBeli <= 0) return alert('Jumlah kotor dan harga beli harus > 0!');
 
-        const selectedCat = categories.find(c => c.code === formAmbil.kategoriCode) || { code: 'A', name: 'Umum' };
+        const selectedCat = categories.find(c => c.code === formAmbil.kategoriCode) || categories[0] || { code: 'A', name: 'Umum' };
         
         const nextNum = transactions.length + 1;
         const newId = `TRX-${String(nextNum).padStart(3, '0')}`;
@@ -323,7 +360,6 @@
         }
       };
 
-      // Hitung total kotor dari transaksi terpilih
       const selectedTrxList = transactions.filter(t => formOlah.selectedTrxIds.includes(t.id));
       const totalKotorSelected = selectedTrxList.reduce((sum, t) => sum + t.jumlahKotor, 0);
       const totalModalSelected = selectedTrxList.reduce((sum, t) => sum + t.totalBeli, 0);
@@ -339,7 +375,6 @@
         if (formOlah.selectedTrxIds.length === 0) return alert('Pilih minimal 1 transaksi barang masuk yang akan diolah!');
         if (murniVal <= 0) return alert('Hasil Perak Murni harus > 0!');
 
-        // Bagi hasil murni & biaya olah proporsional sesuai berat kotor masing-masing item
         const updatedItems = selectedTrxList.map(t => {
           const porsiGram = t.jumlahKotor / totalKotorSelected;
           const murniItem = parseFloat((murniVal * porsiGram).toFixed(2));
@@ -394,27 +429,31 @@
         setActiveTab('dashboard');
       };
 
+      // TANGANI MANAJEMEN KATEGORI VARIAN BARANG
       const handleAddCategory = (e) => {
         e.preventDefault();
         if (!newCatCode.trim() || !newCatName.trim()) return;
         const codeUpper = newCatCode.trim().toUpperCase();
         if (categories.some(c => c.code === codeUpper)) return alert('Kode Kategori sudah ada!');
 
-        setCategories([...categories, { code: codeUpper, name: newCatName.trim() }]);
+        const updated = [...categories, { code: codeUpper, name: newCatName.trim() }];
+        saveCategoriesToSheets(updated);
         setNewCatCode('');
         setNewCatName('');
       };
 
       const handleSaveEditCategory = (code) => {
         if (!editCatNameText.trim()) return;
-        setCategories(categories.map(c => c.code === code ? { ...c, name: editCatNameText.trim() } : c));
+        const updated = categories.map(c => c.code === code ? { ...c, name: editCatNameText.trim() } : c);
+        saveCategoriesToSheets(updated);
         setEditingCatCode(null);
         setEditCatNameText('');
       };
 
       const handleDeleteCategory = (code) => {
         if (window.confirm(`Hapus kategori [${code}]?`)) {
-          setCategories(categories.filter(c => c.code !== code));
+          const updated = categories.filter(c => c.code !== code);
+          saveCategoriesToSheets(updated);
         }
       };
 
@@ -439,7 +478,7 @@
       const totalOmsetPenjualan = transactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalJual || 0), 0);
       const totalLabaBersih = transactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalUntung || 0), 0);
 
-      // JIKA BELUM LOGIN: TAMPILKAN FORM LOGIN / SIGN UP
+      // JIKA BELUM LOGIN
       if (!currentUser) {
         return (
           <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4 py-8">
@@ -747,7 +786,7 @@
               </div>
             )}
 
-            {/* TAB 2: PENGOLAHAN (DENGAN MULTI-SELECT & FITUR EFISIENSI/PENYUSUTAN) */}
+            {/* TAB 2: PENGOLAHAN */}
             {activeTab === 'pengolahan' && (
               <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
                 <div className="bg-slate-900 text-white p-6">
@@ -755,8 +794,6 @@
                   <p className="text-xs text-slate-300 mt-1">Pilih satu atau beberapa transaksi pembelian barang kotor yang akan diolah sekaligus.</p>
                 </div>
                 <form onSubmit={handleSavePengolahan} className="p-6 space-y-6">
-                  
-                  {/* PILIH MULTIPLE TRANSAKSI */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                       Pilih Item Transaksi Masuk ({formOlah.selectedTrxIds.length} Dipilih)
@@ -794,7 +831,6 @@
                     )}
                   </div>
 
-                  {/* AKUMULASI DARI ITEM TERPILIH */}
                   {selectedTrxList.length > 0 && (
                     <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl grid grid-cols-2 gap-4 text-slate-800">
                       <div>
@@ -808,7 +844,6 @@
                     </div>
                   )}
 
-                  {/* FORM INPUT HASIL & BIAYA */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Pengolah / Refining Operator</label>
                     <input type="text" required placeholder="e.g. Zaenal" value={formOlah.pengolahSelect} onChange={(e) => setFormOlah({ ...formOlah, pengolahSelect: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
@@ -825,7 +860,6 @@
                     </div>
                   </div>
 
-                  {/* KALKULATOR LIVE EFISIENSI & PENYUSUTAN */}
                   {totalKotorSelected > 0 && murniVal > 0 && (
                     <div className="p-4 bg-slate-900 text-white rounded-xl space-y-3">
                       <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">📊 Analisis Efisiensi & Penyusutan Processing</h4>
@@ -1023,7 +1057,7 @@
               </div>
             )}
 
-            {/* TAB 5: KELOLA VARIAN */}
+            {/* TAB 5: KELOLA VARIAN BARANG */}
             {activeTab === 'kategori' && currentUser.role === 'Admin' && (
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -1036,7 +1070,7 @@
                 </div>
 
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                  <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">📋 Daftar Varian Jenis Barang</h3>
+                  <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">📋 Daftar Varian Jenis Barang (Tersimpan di Sheet 'Kategori')</h3>
                   <div className="divide-y divide-slate-100 border rounded-lg overflow-hidden">
                     {categories.map((cat) => (
                       <div key={cat.code} className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50 transition">
