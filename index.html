@@ -16,7 +16,7 @@
     const { useState, useEffect } = React;
 
     // URL Web App Terbaru Anda
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxune06hFWZ5_UPpRDX88_GrN1TvqRV93R-tGX75gHBAtmyPd6S0_XoJ8YfVJEV92Entg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwwMMmcw4lN9hHwZtoCupjPq2SwhixgCDi4riSrcbs_bNFYWIyOuQuR7G6_Y1JPGalJww/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -35,9 +35,18 @@
         return saved ? JSON.parse(saved) : null;
       });
 
+      const [authMode, setAuthMode] = useState('login'); // 'login' ATAU 'signup'
       const [loginUsername, setLoginUsername] = useState('');
       const [loginPassword, setLoginPassword] = useState('');
-      const [loginError, setLoginError] = useState('');
+
+      // STATE FORM SIGN UP
+      const [signupNama, setSignupNama] = useState('');
+      const [signupUsername, setSignupUsername] = useState('');
+      const [signupPassword, setSignupPassword] = useState('');
+      const [signupRole, setSignupRole] = useState('Petugas');
+
+      const [authError, setAuthError] = useState('');
+      const [authSuccess, setAuthSuccess] = useState('');
 
       const [activeTab, setActiveTab] = useState('dashboard');
       const [searchTerm, setSearchTerm] = useState('');
@@ -68,7 +77,8 @@
       const handleLoginSubmit = (e) => {
         e.preventDefault();
         setLoading(true);
-        setLoginError('');
+        setAuthError('');
+        setAuthSuccess('');
 
         fetch(SCRIPT_URL + '?type=users&t=' + new Date().getTime())
           .then(res => res.json())
@@ -90,16 +100,58 @@
                 localStorage.setItem('perak_user_session', JSON.stringify(userObj));
                 showToast(`Selamat datang, ${userObj.nama}!`);
               } else {
-                setLoginError('Username atau Password salah!');
+                setAuthError('Username atau Password salah!');
               }
             } else {
-              setLoginError('Data akun tidak ditemukan di Google Sheets Users.');
+              setAuthError('Data akun tidak ditemukan di Google Sheets Users.');
             }
           })
           .catch(err => {
             setLoading(false);
-            setLoginError('Gagal menghubungkan ke database user.');
+            setAuthError('Gagal menghubungkan ke database user.');
           });
+      };
+
+      // HANDLE SIGN UP / REGISTRASI
+      const handleSignUpSubmit = (e) => {
+        e.preventDefault();
+        if (!signupNama.trim() || !signupUsername.trim() || !signupPassword.trim()) {
+          return setAuthError('Semua bidang harus diisi!');
+        }
+
+        setLoading(true);
+        setAuthError('');
+        setAuthSuccess('');
+
+        const payload = {
+          action: 'REGISTER_USER',
+          nama: signupNama.trim(),
+          username: signupUsername.trim(),
+          password: signupPassword.trim(),
+          role: signupRole
+        };
+
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        .then(() => {
+          setTimeout(() => {
+            setLoading(false);
+            setAuthSuccess('🎉 Akun berhasil dibuat! Silakan masuk dengan username & password Anda.');
+            setLoginUsername(signupUsername.trim());
+            setSignupNama('');
+            setSignupUsername('');
+            setSignupPassword('');
+            setAuthMode('login');
+          }, 2000);
+        })
+        .catch(err => {
+          setLoading(false);
+          setAuthError('Gagal mendaftarkan akun.');
+        });
       };
 
       // HANDLE LOGOUT
@@ -361,14 +413,14 @@
       const totalOmsetPenjualan = transactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalJual || 0), 0);
       const totalLabaBersih = transactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalUntung || 0), 0);
 
-      // JIKA BELUM LOGIN: TAMPILKAN FORM LOGIN
+      // JIKA BELUM LOGIN: TAMPILKAN FORM LOGIN / SIGN UP
       if (!currentUser) {
         return (
-          <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4 py-8">
             {loading && (
               <div className="fixed inset-0 bg-slate-900/80 z-50 flex flex-col items-center justify-center text-white">
                 <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="text-sm font-bold">Memeriksa Akun Anda...</p>
+                <p className="text-sm font-bold">Memproses Data...</p>
               </div>
             )}
 
@@ -376,48 +428,133 @@
               <div className="text-center mb-6">
                 <div className="inline-block bg-amber-500 text-slate-900 p-3 rounded-2xl font-black text-3xl mb-2">Ag</div>
                 <h2 className="text-2xl font-bold text-slate-800">Refining Perak System</h2>
-                <p className="text-xs text-slate-500 mt-1">Silakan masuk menggunakan akun Anda</p>
+                <p className="text-xs text-slate-500 mt-1">Sistem Manajemen Pengolahan & Penjualan Perak</p>
               </div>
 
-              {loginError && (
+              {/* TOGGLE TAB LOGIN / SIGN UP */}
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
+                <button
+                  onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess(''); }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+                    authMode === 'login' ? 'bg-amber-500 text-slate-900 shadow' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Masuk (Sign In)
+                </button>
+                <button
+                  onClick={() => { setAuthMode('signup'); setAuthError(''); setAuthSuccess(''); }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
+                    authMode === 'signup' ? 'bg-amber-500 text-slate-900 shadow' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Daftar (Sign Up)
+                </button>
+              </div>
+
+              {authError && (
                 <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2.5 rounded-lg text-xs font-semibold mb-4">
-                  ⚠️ {loginError}
+                  ⚠️ {authError}
                 </div>
               )}
 
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Username</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Masukkan username"
-                    value={loginUsername}
-                    onChange={(e) => setLoginUsername(e.target.value)}
-                    className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
-                  />
+              {authSuccess && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2.5 rounded-lg text-xs font-semibold mb-4">
+                  {authSuccess}
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Masukkan password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl shadow-lg transition"
-                >
-                  Masuk Ke Sistem ➔
-                </button>
-              </form>
+              )}
+
+              {/* FORM LOGIN */}
+              {authMode === 'login' && (
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Username</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Masukkan username"
+                      value={loginUsername}
+                      onChange={(e) => setLoginUsername(e.target.value)}
+                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Masukkan password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl shadow-lg transition"
+                  >
+                    Masuk Ke Sistem ➔
+                  </button>
+                </form>
+              )}
+
+              {/* FORM SIGN UP */}
+              {authMode === 'signup' && (
+                <form onSubmit={handleSignUpSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Nama Lengkap</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Reva Surya"
+                      value={signupNama}
+                      onChange={(e) => setSignupNama(e.target.value)}
+                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Username Baru</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. reva"
+                      value={signupUsername}
+                      onChange={(e) => setSignupUsername(e.target.value)}
+                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Password Baru</label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Minimal 6 karakter"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tipe Hak Akses (Role)</label>
+                    <select
+                      value={signupRole}
+                      onChange={(e) => setSignupRole(e.target.value)}
+                      className="w-full px-4 py-2.5 border rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="Petugas">Petugas (Tim Lapangan/Pengolahan)</option>
+                      <option value="Admin">Admin (Pemilik/Laporan Lengkap)</option>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-lg transition"
+                  >
+                    Daftar Akun Baru ➔
+                  </button>
+                </form>
+              )}
 
               <div className="mt-6 text-center text-[11px] text-slate-400">
-                Data pengguna dikelola di Google Sheets Users
+                Data akun tersimpan otomatis di Google Sheets
               </div>
             </div>
           </div>
@@ -791,7 +928,7 @@
                                     className="text-red-500 hover:text-red-700 font-bold px-2 py-1 bg-red-50 hover:bg-red-100 rounded text-xs"
                                     title="Hapus Transaksi Ini"
                                   >
-                                    🗑️ Hapus
+                                    🗑️️ Hapus
                                   </button>
                                 </td>
                               )}
