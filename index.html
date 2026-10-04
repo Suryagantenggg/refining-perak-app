@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Refining Perak System - Connected to Sheet Transaksi</title>
+  <title>Refining Perak System - Multi Select Penjualan</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,7 +16,7 @@
     const { useState, useEffect } = React;
 
     // URL Web App Google Apps Script Terbaru Anda
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxZBc5o6g6i2y0HR9Gp90DBBgzodM4IkT2zDpbcm9aRkgjbxdHR7PcUdKbHKR4WmpT_/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZaa5EJw_9tz2egLlmuceADVcF9n7Bv0W9i2JcAT3zeD-PVh9J2vXEuFgIbZeDn02l/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -30,7 +30,6 @@
     ];
 
     function App() {
-      // STATE AUTHENTICATION
       const [currentUser, setCurrentUser] = useState(() => {
         const saved = localStorage.getItem('perak_user_session');
         return saved ? JSON.parse(saved) : null;
@@ -65,7 +64,6 @@
         setTimeout(() => setToastMsg(''), 4000);
       };
 
-      // FETCH CATEGORIES DARI GOOGLE SHEETS
       const loadCategoriesFromSheets = () => {
         fetch(SCRIPT_URL + '?type=categories&t=' + new Date().getTime())
           .then(res => res.json())
@@ -103,12 +101,10 @@
         });
       };
 
-      // HANDLE LOGIN
       const handleLoginSubmit = (e) => {
         e.preventDefault();
         setLoading(true);
         setAuthError('');
-        setAuthSuccess('');
 
         fetch(SCRIPT_URL + '?type=users&t=' + new Date().getTime())
           .then(res => res.json())
@@ -121,11 +117,7 @@
               );
 
               if (userMatch) {
-                const userObj = {
-                  nama: userMatch[0],
-                  username: userMatch[1],
-                  role: userMatch[3] || 'Petugas'
-                };
+                const userObj = { nama: userMatch[0], username: userMatch[1], role: userMatch[3] || 'Petugas' };
                 setCurrentUser(userObj);
                 localStorage.setItem('perak_user_session', JSON.stringify(userObj));
                 showToast(`Selamat datang, ${userObj.nama}!`);
@@ -133,7 +125,7 @@
                 setAuthError('Username atau Password salah!');
               }
             } else {
-              setAuthError('Data akun tidak ditemukan di Google Sheets Users.');
+              setAuthError('Data akun tidak ditemukan!');
             }
           })
           .catch(() => {
@@ -142,7 +134,6 @@
           });
       };
 
-      // HANDLE SIGN UP
       const handleSignUpSubmit = (e) => {
         e.preventDefault();
         if (!signupNama.trim() || !signupUsername.trim() || !signupPassword.trim()) {
@@ -151,7 +142,6 @@
 
         setLoading(true);
         setAuthError('');
-        setAuthSuccess('');
 
         const payload = {
           action: 'REGISTER_USER',
@@ -170,7 +160,7 @@
         .then(() => {
           setTimeout(() => {
             setLoading(false);
-            setAuthSuccess('🎉 Akun berhasil dibuat! Silakan masuk dengan username & password Anda.');
+            setAuthSuccess('🎉 Akun berhasil dibuat! Silakan masuk.');
             setLoginUsername(signupUsername.trim());
             setSignupNama('');
             setSignupUsername('');
@@ -191,7 +181,6 @@
         }
       };
 
-      // FETCH DATA DARI SHEET TRANSAKSI (30 KOLOM)
       const loadDataFromSheets = () => {
         if (!currentUser) return;
         setLoading(true);
@@ -223,10 +212,12 @@
                   biayaOlah: parseFloat(row[11]) || 0,
                   efisiensi: parseFloat(row[12]) || 0,
                   tanggalPenjualan: row[21] || '-',
-                  tokoPembeli: row[27] ? (row[28] || '-') : '-',
+                  tokoPembeli: row[28] || '-',
                   jumlahJual: parseFloat(row[25]) || 0,
+                  hargaJualSatuan: parseFloat(row[26]) || 0,
                   totalJual: totalJual,
-                  totalUntung: totalJual > 0 ? (totalJual - (parseFloat(row[7]) || 0) - (parseFloat(row[8]) || 0) - (parseFloat(row[11]) || 0)) : 0,
+                  biayaPenjualan: parseFloat(row[29]) || 0,
+                  totalUntung: totalJual > 0 ? (totalJual - (parseFloat(row[7]) || 0) - (parseFloat(row[8]) || 0) - (parseFloat(row[11]) || 0) - (parseFloat(row[29]) || 0)) : 0,
                   status: status
                 };
               }).filter(t => t.id !== '');
@@ -246,7 +237,7 @@
         if (currentUser) loadDataFromSheets();
       }, [currentUser]);
 
-      // FORM PENGAMBILAN
+      // FORM PEMBELIAN
       const [formAmbil, setFormAmbil] = useState({
         tanggal: new Date().toISOString().split('T')[0],
         pengambilSelect: currentUser ? currentUser.nama : 'Andi',
@@ -266,13 +257,12 @@
         biayaOlah: ''
       });
 
-      // FORM PENJUALAN
+      // FORM PENJUALAN (MULTI-SELECT)
       const [formJual, setFormJual] = useState({
-        trxId: '',
+        selectedTrxIds: [],
         tanggalJual: new Date().toISOString().split('T')[0],
         hargaJualSatuan: '',
-        jumlahJual: '',
-        tokoPembeli: ''
+        biayaPenjualan: ''
       });
 
       const formatRupiah = (val) => {
@@ -309,25 +299,18 @@
 
       const handleSavePengambilan = (e) => {
         e.preventDefault();
-        const pengambilFinal = formAmbil.pengambilSelect.trim();
-        if (!pengambilFinal || !formAmbil.tempatAmbil.trim() || !formAmbil.lokasiAmbil.trim()) {
-          return alert('Semua bidang sumber & lokasi harus diisi!');
-        }
-
         const kotor = parseFloat(formAmbil.jumlahKotor) || 0;
         const hargaBeli = parseFloat(formAmbil.hargaBeliSatuan) || 0;
         const transport = parseFloat(formAmbil.biayaTransport) || 0;
 
-        if (kotor <= 0 || hargaBeli <= 0) return alert('Jumlah kotor dan harga beli harus > 0!');
-
-        const selectedCat = categories.find(c => c.code === formAmbil.kategoriCode) || categories[0] || { code: 'A', name: 'Umum' };
+        const selectedCat = categories.find(c => c.code === formAmbil.kategoriCode) || categories[0];
 
         const payload = {
           tanggalAmbil: formAmbil.tanggal,
           kategoriName: `[${selectedCat.code}] ${selectedCat.name}`,
-          pengambil: pengambilFinal,
-          tempatAmbil: formAmbil.tempatAmbil.trim(),
-          lokasiAmbil: formAmbil.lokasiAmbil.trim(),
+          pengambil: formAmbil.pengambilSelect,
+          tempatAmbil: formAmbil.tempatAmbil,
+          lokasiAmbil: formAmbil.lokasiAmbil,
           jumlahKotor: kotor,
           totalBeli: kotor * hargaBeli,
           biayaTransport: transport
@@ -338,31 +321,32 @@
         setActiveTab('dashboard');
       };
 
-      const handleToggleSelectTrx = (id) => {
+      // TOGGLE SELECT PENGOLAHAN
+      const handleToggleSelectOlah = (id) => {
         const current = formOlah.selectedTrxIds;
-        if (current.includes(id)) {
-          setFormOlah({ ...formOlah, selectedTrxIds: current.filter(x => x !== id) });
-        } else {
-          setFormOlah({ ...formOlah, selectedTrxIds: [...current, id] });
-        }
+        if (current.includes(id)) setFormOlah({ ...formOlah, selectedTrxIds: current.filter(x => x !== id) });
+        else setFormOlah({ ...formOlah, selectedTrxIds: [...current, id] });
       };
 
-      const selectedTrxList = transactions.filter(t => formOlah.selectedTrxIds.includes(t.id));
-      const totalKotorSelected = selectedTrxList.reduce((sum, t) => sum + t.jumlahKotor, 0);
-      const totalModalSelected = selectedTrxList.reduce((sum, t) => sum + t.totalBeli, 0);
+      // TOGGLE SELECT PENJUALAN
+      const handleToggleSelectJual = (id) => {
+        const current = formJual.selectedTrxIds;
+        if (current.includes(id)) setFormJual({ ...formJual, selectedTrxIds: current.filter(x => x !== id) });
+        else setFormJual({ ...formJual, selectedTrxIds: [...current, id] });
+      };
+
+      const selectedTrxOlahList = transactions.filter(t => formOlah.selectedTrxIds.includes(t.id));
+      const totalKotorSelected = selectedTrxOlahList.reduce((sum, t) => sum + t.jumlahKotor, 0);
 
       const murniVal = parseFloat(formOlah.jumlahMurni) || 0;
       const totalBiayaOlahVal = parseFloat(formOlah.biayaOlah) || 0;
-      const penyusutanGram = totalKotorSelected > 0 && murniVal > 0 ? (totalKotorSelected - murniVal) : 0;
-      const persentaseSusut = totalKotorSelected > 0 && murniVal > 0 ? ((penyusutanGram / totalKotorSelected) * 100).toFixed(2) : 0;
-      const overallEfisiensi = totalKotorSelected > 0 && murniVal > 0 ? ((murniVal / totalKotorSelected) * 100).toFixed(2) : 0;
 
       const handleSavePengolahan = (e) => {
         e.preventDefault();
         if (formOlah.selectedTrxIds.length === 0) return alert('Pilih minimal 1 transaksi!');
         if (murniVal <= 0) return alert('Hasil Perak Murni harus > 0!');
 
-        const updatedItems = selectedTrxList.map(t => {
+        const updatedItems = selectedTrxOlahList.map(t => {
           const porsiGram = t.jumlahKotor / totalKotorSelected;
           const murniItem = parseFloat((murniVal * porsiGram).toFixed(2));
           const biayaItem = parseFloat((totalBiayaOlahVal * porsiGram).toFixed(0));
@@ -382,31 +366,35 @@
         setActiveTab('dashboard');
       };
 
+      // PROSES PENJUALAN MULTI-SELECT
+      const selectedTrxJualList = transactions.filter(t => formJual.selectedTrxIds.includes(t.id));
+      const totalMurniJualSelected = selectedTrxJualList.reduce((sum, t) => sum + t.jumlahMurni, 0);
+      const hargaJualVal = parseFloat(formJual.hargaJualSatuan) || 0;
+      const totalBiayaPenjualanVal = parseFloat(formJual.biayaPenjualan) || 0;
+
       const handleSavePenjualan = (e) => {
         e.preventDefault();
-        if (!formJual.trxId) return alert('Pilih transaksi yang akan dijual!');
+        if (formJual.selectedTrxIds.length === 0) return alert('Pilih minimal 1 barang hasil olahan yang akan dijual!');
+        if (hargaJualVal <= 0) return alert('Harga jual per gram harus > 0!');
 
-        const hargaJual = parseFloat(formJual.hargaJualSatuan) || 0;
-        const jmlJual = parseFloat(formJual.jumlahJual) || 0;
+        const updatedItems = selectedTrxJualList.map(t => {
+          const porsiMurni = t.jumlahMurni / totalMurniJualSelected;
+          const totalJualItem = parseFloat((t.jumlahMurni * hargaJualVal).toFixed(0));
+          const biayaPenjualanItem = parseFloat((totalBiayaPenjualanVal * porsiMurni).toFixed(0));
 
-        if (hargaJual <= 0 || jmlJual <= 0) return alert('Harga dan jumlah jual harus > 0!');
+          return {
+            ...t,
+            tanggalJual: formJual.tanggalJual,
+            jumlahJual: t.jumlahMurni,
+            hargaJualSatuan: hargaJualVal,
+            totalJual: totalJualItem,
+            picPenjual: currentUser.nama,
+            biayaPenjualan: biayaPenjualanItem
+          };
+        });
 
-        const t = transactions.find(x => x.id === formJual.trxId);
-        if (!t) return;
-
-        const payload = {
-          id: t.id,
-          kategoriName: t.kategoriName,
-          tanggalJual: formJual.tanggalJual,
-          jumlahJual: jmlJual,
-          hargaJualSatuan: hargaJual,
-          totalJual: jmlJual * hargaJual,
-          tokoPembeli: formJual.tokoPembeli.trim(),
-          status: 'TERJUAL'
-        };
-
-        sendToGoogleSheets(payload, `💰 Penjualan ${t.id} berhasil dicatat di Sheet Transaksi!`);
-        setFormJual({ trxId: '', tanggalJual: new Date().toISOString().split('T')[0], hargaJualSatuan: '', jumlahJual: '', tokoPembeli: '' });
+        sendToGoogleSheets({ action: 'BATCH_UPDATE_PENJUALAN', items: updatedItems }, `💰 Penjualan ${updatedItems.length} barang berhasil dicatat di Sheet Transaksi!`);
+        setFormJual({ selectedTrxIds: [], tanggalJual: new Date().toISOString().split('T')[0], hargaJualSatuan: '', biayaPenjualan: '' });
         setActiveTab('dashboard');
       };
 
@@ -422,21 +410,6 @@
         setNewCatName('');
       };
 
-      const handleSaveEditCategory = (code) => {
-        if (!editCatNameText.trim()) return;
-        const updated = categories.map(c => c.code === code ? { ...c, name: editCatNameText.trim() } : c);
-        saveCategoriesToSheets(updated);
-        setEditingCatCode(null);
-        setEditCatNameText('');
-      };
-
-      const handleDeleteCategory = (code) => {
-        if (window.confirm(`Hapus kategori [${code}]?`)) {
-          const updated = categories.filter(c => c.code !== code);
-          saveCategoriesToSheets(updated);
-        }
-      };
-
       const pendingOlahList = transactions.filter(t => t.status === 'MENUNGGU_OLAH');
       const pendingJualList = transactions.filter(t => t.status === 'SELESAI_OLAH');
 
@@ -448,7 +421,8 @@
           t.pengambil.toLowerCase().includes(term) ||
           (t.tempatAmbil && t.tempatAmbil.toLowerCase().includes(term)) ||
           (t.lokasiAmbil && t.lokasiAmbil.toLowerCase().includes(term)) ||
-          (t.pengolah && t.pengolah.toLowerCase().includes(term))
+          (t.pengolah && t.pengolah.toLowerCase().includes(term)) ||
+          (t.tokoPembeli && t.tokoPembeli.toLowerCase().includes(term))
         );
       });
 
@@ -458,611 +432,216 @@
       const totalOmsetPenjualan = transactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalJual || 0), 0);
       const totalLabaBersih = transactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalUntung || 0), 0);
 
-      // JIKA BELUM LOGIN
       if (!currentUser) {
         return (
-          <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4 py-8">
-            {loading && (
-              <div className="fixed inset-0 bg-slate-900/80 z-50 flex flex-col items-center justify-center text-white">
-                <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="text-sm font-bold">Memproses Data...</p>
-              </div>
-            )}
-
-            <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 border border-slate-800">
-              <div className="text-center mb-6">
-                <div className="inline-block bg-amber-500 text-slate-900 p-3 rounded-2xl font-black text-3xl mb-2">Ag</div>
-                <h2 className="text-2xl font-bold text-slate-800">Refining Perak System</h2>
-                <p className="text-xs text-slate-500 mt-1">Connected to Sheet Transaksi</p>
-              </div>
-
-              <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
-                <button
-                  onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess(''); }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
-                    authMode === 'login' ? 'bg-amber-500 text-slate-900 shadow' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Masuk (Sign In)
-                </button>
-                <button
-                  onClick={() => { setAuthMode('signup'); setAuthError(''); setAuthSuccess(''); }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
-                    authMode === 'signup' ? 'bg-amber-500 text-slate-900 shadow' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Daftar (Sign Up)
-                </button>
-              </div>
-
-              {authError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2.5 rounded-lg text-xs font-semibold mb-4">
-                  ⚠️ {authError}
-                </div>
-              )}
-
-              {authSuccess && (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2.5 rounded-lg text-xs font-semibold mb-4">
-                  {authSuccess}
-                </div>
-              )}
-
-              {authMode === 'login' && (
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Username</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Masukkan username"
-                      value={loginUsername}
-                      onChange={(e) => setLoginUsername(e.target.value)}
-                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Masukkan password"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl shadow-lg transition"
-                  >
-                    Masuk Ke Sistem ➔
-                  </button>
-                </form>
-              )}
-
-              {authMode === 'signup' && (
-                <form onSubmit={handleSignUpSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Nama Lengkap</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Reva Surya"
-                      value={signupNama}
-                      onChange={(e) => setSignupNama(e.target.value)}
-                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Username Baru</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. reva"
-                      value={signupUsername}
-                      onChange={(e) => setSignupUsername(e.target.value)}
-                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Password Baru</label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Minimal 6 karakter"
-                      value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
-                      className="w-full px-4 py-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-lg transition"
-                  >
-                    Daftar Akun Baru ➔
-                  </button>
-                </form>
-              )}
-
-              <div className="mt-6 text-center text-[11px] text-slate-400">
-                Data akun tersimpan otomatis di Google Sheets (Sheet: Users)
-              </div>
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+              <h2 className="text-2xl font-bold text-slate-800 text-center mb-6">Refining Perak System</h2>
+              {authError && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs mb-4">{authError}</div>}
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <input type="text" placeholder="Username" required value={loginUsername} onChange={e=>setLoginUsername(e.target.value)} className="w-full p-3 border rounded-xl text-sm" />
+                <input type="password" placeholder="Password" required value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} className="w-full p-3 border rounded-xl text-sm" />
+                <button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold p-3 rounded-xl">Masuk ➔</button>
+              </form>
             </div>
           </div>
         );
       }
 
-      // JIKA SUDAH LOGIN
       return (
-        <div className="min-h-screen bg-slate-100 text-slate-800 font-sans relative">
-          
-          {toastMsg && (
-            <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-emerald-400 border border-emerald-500 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-bounce">
-              <span className="text-lg">✨</span>
-              <p className="text-xs font-bold">{toastMsg}</p>
-            </div>
-          )}
-
+        <div className="min-h-screen bg-slate-100 font-sans">
           {loading && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-white">
-              <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-              <p className="text-sm font-bold tracking-wider">Menghubungkan ke Sheet Transaksi...</p>
+            <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center text-white font-bold">
+              Menghubungkan ke Sheet Transaksi...
             </div>
           )}
-
-          <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
-            <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
-              <div className="flex items-center space-x-3">
-                <div className="bg-amber-500 text-slate-900 p-2 rounded-lg font-black text-xl">Ag</div>
-                <div>
-                  <h1 className="text-lg font-bold tracking-wide">Refining Perak System</h1>
-                  <p className="text-xs text-emerald-400 font-semibold">🟢 Connected to Sheet Transaksi</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-xs font-bold text-slate-200">{currentUser.nama}</p>
-                  <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-semibold">{currentUser.role}</span>
-                </div>
-                <button 
-                  onClick={loadDataFromSheets}
-                  className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded border border-slate-700 transition"
-                >
-                  🔄 Sync
-                </button>
-                <button 
-                  onClick={handleLogout}
-                  className="text-xs bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-500/30 px-3 py-1.5 rounded font-bold transition"
-                >
-                  🚪 Logout
-                </button>
-              </div>
+          
+          <header className="bg-slate-900 text-white p-4 sticky top-0 z-40 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-500 text-slate-900 px-2.5 py-1 rounded-lg font-black text-xl">Ag</div>
+              <h1 className="font-bold text-lg">Refining Perak System</h1>
             </div>
-
-            <nav className="bg-slate-800 border-t border-slate-700">
-              <div className="max-w-7xl mx-auto px-4 flex overflow-x-auto">
-                <button
-                  onClick={() => setActiveTab('pengambilan')}
-                  className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-                    activeTab === 'pengambilan' ? 'border-amber-500 text-amber-400 bg-slate-900/50' : 'border-transparent text-slate-300 hover:text-white'
-                  }`}
-                >
-                  📥 1. Input Pembelian
-                </button>
-                <button
-                  onClick={() => setActiveTab('pengolahan')}
-                  className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-                    activeTab === 'pengolahan' ? 'border-amber-500 text-amber-400 bg-slate-900/50' : 'border-transparent text-slate-300 hover:text-white'
-                  }`}
-                >
-                  🧪 2. Input Pengolahan ({pendingOlahList.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('penjualan')}
-                  className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-                    activeTab === 'penjualan' ? 'border-amber-500 text-amber-400 bg-slate-900/50' : 'border-transparent text-slate-300 hover:text-white'
-                  }`}
-                >
-                  💰 3. Input Penjualan ({pendingJualList.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-                    activeTab === 'dashboard' ? 'border-amber-500 text-amber-400 bg-slate-900/50' : 'border-transparent text-slate-300 hover:text-white'
-                  }`}
-                >
-                  📊 Laporan Transaksi
-                </button>
-                {currentUser.role === 'Admin' && (
-                  <button
-                    onClick={() => setActiveTab('kategori')}
-                    className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-                      activeTab === 'kategori' ? 'border-amber-500 text-amber-400 bg-slate-900/50' : 'border-transparent text-slate-300 hover:text-white'
-                    }`}
-                  >
-                    ⚙️ Varian Jenis Barang
-                  </button>
-                )}
-              </div>
-            </nav>
+            <div className="flex items-center gap-3 text-xs">
+              <span>👤 <b>{currentUser.nama}</b> ({currentUser.role})</span>
+              <button onClick={handleLogout} className="bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1 rounded font-bold">Logout</button>
+            </div>
           </header>
 
-          <main className="max-w-7xl mx-auto px-4 py-8">
+          <main className="max-w-7xl mx-auto p-6 space-y-6">
+            <div className="flex bg-white p-2 rounded-xl shadow gap-2 overflow-x-auto text-xs font-bold">
+              <button onClick={()=>setActiveTab('pengambilan')} className={`px-4 py-2 rounded-lg ${activeTab==='pengambilan'?'bg-amber-500 text-slate-900':'text-slate-600'}`}>📥 1. Pembelian</button>
+              <button onClick={()=>setActiveTab('pengolahan')} className={`px-4 py-2 rounded-lg ${activeTab==='pengolahan'?'bg-amber-500 text-slate-900':'text-slate-600'}`}>🧪 2. Pengolahan ({pendingOlahList.length})</button>
+              <button onClick={()=>setActiveTab('penjualan')} className={`px-4 py-2 rounded-lg ${activeTab==='penjualan'?'bg-amber-500 text-slate-900':'text-slate-600'}`}>💰 3. Penjualan ({pendingJualList.length})</button>
+              <button onClick={()=>setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg ${activeTab==='dashboard'?'bg-amber-500 text-slate-900':'text-slate-600'}`}>📊 Laporan Transaksi</button>
+            </div>
+
             {/* TAB 1: PEMBELIAN */}
             {activeTab === 'pengambilan' && (
-              <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-                <div className="bg-slate-900 text-white p-6">
-                  <h2 className="text-lg font-bold">📥 Input Pembelian Barang Mentah</h2>
+              <form onSubmit={handleSavePengambilan} className="bg-white p-6 rounded-xl shadow space-y-4 max-w-xl mx-auto">
+                <h3 className="font-bold text-slate-800 border-b pb-2">📥 Input Pembelian Barang Mentah</h3>
+                <input type="date" value={formAmbil.tanggal} onChange={e=>setFormAmbil({...formAmbil, tanggal:e.target.value})} className="w-full p-2 border rounded text-sm" />
+                <input type="text" placeholder="Tempat Ambil" value={formAmbil.tempatAmbil} onChange={e=>setFormAmbil({...formAmbil, tempatAmbil:e.target.value})} className="w-full p-2 border rounded text-sm" />
+                <input type="text" placeholder="Daerah Ambil" value={formAmbil.lokasiAmbil} onChange={e=>setFormAmbil({...formAmbil, lokasiAmbil:e.target.value})} className="w-full p-2 border rounded text-sm" />
+                <select value={formAmbil.kategoriCode} onChange={e=>setFormAmbil({...formAmbil, kategoriCode:e.target.value})} className="w-full p-2 border rounded text-sm">
+                  {categories.map(c=><option key={c.code} value={c.code}>[{c.code}] {c.name}</option>)}
+                </select>
+                <div className="grid grid-cols-3 gap-2">
+                  <input type="number" placeholder="Kotor (Gram)" value={formAmbil.jumlahKotor} onChange={e=>setFormAmbil({...formAmbil, jumlahKotor:e.target.value})} className="p-2 border rounded text-sm" />
+                  <input type="number" placeholder="Harga Beli / Gram" value={formAmbil.hargaBeliSatuan} onChange={e=>setFormAmbil({...formAmbil, hargaBeliSatuan:e.target.value})} className="p-2 border rounded text-sm" />
+                  <input type="number" placeholder="Biaya Transport" value={formAmbil.biayaTransport} onChange={e=>setFormAmbil({...formAmbil, biayaTransport:e.target.value})} className="p-2 border rounded text-sm" />
                 </div>
-                <form onSubmit={handleSavePengambilan} className="p-6 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Tanggal Pengambilan</label>
-                      <input type="date" required value={formAmbil.tanggal} onChange={(e) => setFormAmbil({ ...formAmbil, tanggal: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Pengambil Barang (PIC)</label>
-                      <input type="text" required placeholder="e.g. Andi" value={formAmbil.pengambilSelect} onChange={(e) => setFormAmbil({ ...formAmbil, pengambilSelect: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
-                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">📍 Sumber & Lokasi Pengambilan</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Lokasi Pengambilan</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. PT Surya Jaya / Pak Slamet"
-                          value={formAmbil.tempatAmbil}
-                          onChange={(e) => setFormAmbil({ ...formAmbil, tempatAmbil: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Daerah Pengambilan</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Cikarang, Bekasi"
-                          value={formAmbil.lokasiAmbil}
-                          onChange={(e) => setFormAmbil({ ...formAmbil, lokasiAmbil: e.target.value })}
-                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Kategori Jenis Barang</label>
-                    <select value={formAmbil.kategoriCode} onChange={(e) => setFormAmbil({ ...formAmbil, kategoriCode: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                      {categories.map((cat) => (
-                        <option key={cat.code} value={cat.code}>[{cat.code}] {cat.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Total Jumlah Barang (Gram)</label>
-                      <input type="number" step="0.01" required value={formAmbil.jumlahKotor} onChange={(e) => setFormAmbil({ ...formAmbil, jumlahKotor: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Harga Beli / Gram (Rp)</label>
-                      <input type="number" required value={formAmbil.hargaBeliSatuan} onChange={(e) => setFormAmbil({ ...formAmbil, hargaBeliSatuan: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Biaya Aktifitas / Transport (Rp)</label>
-                      <input type="number" placeholder="e.g. 50000" value={formAmbil.biayaTransport} onChange={(e) => setFormAmbil({ ...formAmbil, biayaTransport: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    </div>
-                  </div>
-
-                  <button type="submit" disabled={loading} className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-lg shadow">
-                    Simpan ke Sheet Transaksi ➔
-                  </button>
-                </form>
-              </div>
+                <button type="submit" className="w-full bg-amber-500 font-bold p-3 rounded-lg">Simpan ke Sheet Transaksi</button>
+              </form>
             )}
 
             {/* TAB 2: PENGOLAHAN */}
             {activeTab === 'pengolahan' && (
-              <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-                <div className="bg-slate-900 text-white p-6">
-                  <h2 className="text-lg font-bold">🧪 Input Pengolahan & Pemurnian (Multi-Select Transaksi)</h2>
-                  <p className="text-xs text-slate-300 mt-1">Pilih transaksi pembelian barang kotor yang akan dimurnikan.</p>
+              <div className="max-w-3xl mx-auto bg-white rounded-xl shadow border overflow-hidden">
+                <div className="bg-slate-900 text-white p-5">
+                  <h3 className="font-bold">🧪 Input Pengolahan & Pemurnian (Multi-Select Transaksi)</h3>
                 </div>
-                <form onSubmit={handleSavePengolahan} className="p-6 space-y-6">
+                <form onSubmit={handleSavePengolahan} className="p-6 space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-                      Pilih Transaksi ({formOlah.selectedTrxIds.length} Dipilih)
-                    </label>
-                    {pendingOlahList.length === 0 ? (
-                      <div className="p-4 bg-slate-50 border rounded-lg text-xs text-slate-500 text-center">
-                        Tidak ada antrean barang mentah yang belum diolah.
-                      </div>
+                    <label className="block text-xs font-bold uppercase mb-2">Pilih Transaksi Siap Olah ({formOlah.selectedTrxIds.length} Dipilih)</label>
+                    <div className="max-h-52 overflow-y-auto border rounded-lg divide-y">
+                      {pendingOlahList.map(t => (
+                        <label key={t.id} className="flex items-center justify-between p-3 cursor-pointer hover:bg-slate-50">
+                          <div className="flex items-center gap-2">
+                            <input type="checkbox" checked={formOlah.selectedTrxIds.includes(t.id)} onChange={()=>handleToggleSelectOlah(t.id)} className="w-4 h-4 text-amber-500" />
+                            <span className="font-bold text-xs">{t.id} - {t.kategoriName}</span>
+                          </div>
+                          <span className="text-xs font-mono">{t.jumlahKotor} Gram</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <input type="text" placeholder="PIC Pengolah" value={formOlah.pengolahSelect} onChange={e=>setFormOlah({...formOlah, pengolahSelect:e.target.value})} className="w-full p-2 border rounded text-sm" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="number" step="0.01" placeholder="Hasil Perak Murni (Gram)" value={formOlah.jumlahMurni} onChange={e=>setFormOlah({...formOlah, jumlahMurni:e.target.value})} className="p-2 border rounded text-sm font-bold text-blue-700" />
+                    <input type="number" placeholder="Total Biaya Olah (Rp)" value={formOlah.biayaOlah} onChange={e=>setFormOlah({...formOlah, biayaOlah:e.target.value})} className="p-2 border rounded text-sm" />
+                  </div>
+                  <button type="submit" className="w-full bg-blue-600 text-white font-bold p-3 rounded-lg">Simpan & Update Pemurnian ➔</button>
+                </form>
+              </div>
+            )}
+
+            {/* TAB 3: PENJUALAN (MULTI-SELECT) */}
+            {activeTab === 'penjualan' && (
+              <div className="max-w-3xl mx-auto bg-white rounded-xl shadow border overflow-hidden">
+                <div className="bg-slate-900 text-white p-5">
+                  <h3 className="font-bold">💰 Input Penjualan Perak Murni (Multi-Select Barang)</h3>
+                </div>
+                <form onSubmit={handleSavePenjualan} className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold uppercase mb-2">Pilih Barang Hasil Olahan Siap Jual ({formJual.selectedTrxIds.length} Dipilih)</label>
+                    {pendingJualList.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-4 border rounded-lg">Tidak ada barang hasil olahan yang belum dijual.</p>
                     ) : (
-                      <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
-                        {pendingOlahList.map((t) => {
-                          const isChecked = formOlah.selectedTrxIds.includes(t.id);
-                          return (
-                            <label key={t.id} className={`flex items-center justify-between p-3 cursor-pointer transition ${isChecked ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
-                              <div className="flex items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => handleToggleSelectTrx(t.id)}
-                                  className="w-4 h-4 text-amber-500 rounded focus:ring-amber-400"
-                                />
-                                <div>
-                                  <p className="font-bold text-xs text-slate-800">{t.id} - {t.kategoriName}</p>
-                                  <p className="text-[11px] text-slate-500">📍 {t.tempatAmbil} ({t.lokasiAmbil}) | PIC: {t.pengambil}</p>
-                                </div>
+                      <div className="max-h-52 overflow-y-auto border rounded-lg divide-y">
+                        {pendingJualList.map(t => (
+                          <label key={t.id} className="flex items-center justify-between p-3 cursor-pointer hover:bg-slate-50">
+                            <div className="flex items-center gap-2">
+                              <input type="checkbox" checked={formJual.selectedTrxIds.includes(t.id)} onChange={()=>handleToggleSelectJual(t.id)} className="w-4 h-4 text-emerald-600" />
+                              <div>
+                                <p className="font-bold text-xs">{t.id} - {t.kategoriName}</p>
+                                <p className="text-[10px] text-slate-500">Pengolah: {t.pengolah}</p>
                               </div>
-                              <div className="text-right">
-                                <p className="font-mono font-bold text-xs text-slate-700">{t.jumlahKotor} Gram</p>
-                                <p className="text-[10px] text-slate-400">{formatRupiah(t.totalBeli)}</p>
-                              </div>
-                            </label>
-                          );
-                        })}
+                            </div>
+                            <span className="text-xs font-bold text-blue-600 font-mono">{t.jumlahMurni} Gram</span>
+                          </label>
+                        ))}
                       </div>
                     )}
                   </div>
 
-                  {selectedTrxList.length > 0 && (
-                    <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl grid grid-cols-2 gap-4 text-slate-800">
-                      <div>
-                        <span className="text-[11px] font-semibold text-slate-500 uppercase block">Total Bahan Kotor Terpilih</span>
-                        <p className="text-xl font-black text-slate-900 mt-0.5">{totalKotorSelected.toFixed(2)} <span className="text-xs font-normal">Gram</span></p>
-                      </div>
-                      <div>
-                        <span className="text-[11px] font-semibold text-slate-500 uppercase block">Total Modal Beli</span>
-                        <p className="text-xl font-black text-slate-900 mt-0.5">{formatRupiah(totalModalSelected)}</p>
-                      </div>
+                  {selectedTrxJualList.length > 0 && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex justify-between text-xs font-bold text-slate-800">
+                      <span>Total Perak Murni Terpilih:</span>
+                      <span className="text-blue-700 font-mono">{totalMurniJualSelected.toFixed(2)} Gram</span>
                     </div>
                   )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">PIC Pengolah</label>
-                    <input type="text" required placeholder="e.g. Zaenal" value={formOlah.pengolahSelect} onChange={(e) => setFormOlah({ ...formOlah, pengolahSelect: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Hasil Pengolahan (Gram)</label>
-                      <input type="number" step="0.01" required value={formOlah.jumlahMurni} onChange={(e) => setFormOlah({ ...formOlah, jumlahMurni: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm font-bold text-blue-700" placeholder="e.g. 85.5" />
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Tanggal Penjualan</label>
+                      <input type="date" value={formJual.tanggalJual} onChange={e=>setFormJual({...formJual, tanggalJual:e.target.value})} className="w-full p-2 border rounded text-sm" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Biaya Pengolahan / Chemical (Rp)</label>
-                      <input type="number" placeholder="e.g. 100000" value={formOlah.biayaOlah} onChange={(e) => setFormOlah({ ...formOlah, biayaOlah: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">PIC Penjual (Otomatis)</label>
+                      <input type="text" readOnly value={currentUser.nama} className="w-full p-2 border rounded text-sm bg-slate-100 font-bold text-slate-700" />
                     </div>
                   </div>
 
-                  {totalKotorSelected > 0 && murniVal > 0 && (
-                    <div className="p-4 bg-slate-900 text-white rounded-xl space-y-3">
-                      <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">📊 Analisis Efisiensi & Penyusutan Processing</h4>
-                      <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-800">
-                        <div>
-                          <span className="text-[10px] text-slate-400 block">Penyusutan (Gram)</span>
-                          <p className="text-sm font-black text-red-400 mt-0.5">-{penyusutanGram.toFixed(2)} g</p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 block">Persentase Susut</span>
-                          <p className="text-sm font-black text-red-400 mt-0.5">{persentaseSusut}%</p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 block">Efisiensi</span>
-                          <p className="text-sm font-black text-emerald-400 mt-0.5">{overallEfisiensi}%</p>
-                        </div>
-                      </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Harga Jual Per Satuan / Gram (Rp)</label>
+                      <input type="number" required placeholder="e.g. 15000" value={formJual.hargaJualSatuan} onChange={e=>setFormJual({...formJual, hargaJualSatuan:e.target.value})} className="w-full p-2 border rounded text-sm font-bold text-emerald-700" />
                     </div>
-                  )}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Biaya Aktifitas Penjualan (Rp)</label>
+                      <input type="number" placeholder="e.g. 50000" value={formJual.biayaPenjualan} onChange={e=>setFormJual({...formJual, biayaPenjualan:e.target.value})} className="w-full p-2 border rounded text-sm" />
+                    </div>
+                  </div>
 
-                  <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition">
-                    Simpan & Update Pemurnian ({selectedTrxList.length} Item) ➔
+                  <button type="submit" className="w-full bg-emerald-600 text-white font-bold p-3 rounded-lg shadow">
+                    Selesaikan Penjualan ({selectedTrxJualList.length} Barang) ➔
                   </button>
                 </form>
               </div>
             )}
 
-            {/* TAB 3: PENJUALAN */}
-            {activeTab === 'penjualan' && (
-              <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-                <div className="bg-slate-900 text-white p-6">
-                  <h2 className="text-lg font-bold">💰 Input Penjualan Perak Murni</h2>
-                </div>
-                <form onSubmit={handleSavePenjualan} className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Pilih Perak Siap Jual</label>
-                    <select required value={formJual.trxId} onChange={(e) => {
-                      const selected = transactions.find(t => t.id === e.target.value);
-                      setFormJual({ ...formJual, trxId: e.target.value, jumlahJual: selected ? selected.jumlahMurni : '' });
-                    }} className="w-full px-3 py-2 border rounded-lg text-sm bg-white font-bold">
-                      <option value="">-- Pilih Perak Siap Jual --</option>
-                      {pendingJualList.map((t) => (
-                        <option key={t.id} value={t.id}>{t.id} | {t.kategoriName} | Perak Murni: {t.jumlahMurni}g</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Jumlah Gram Dijual</label>
-                      <input type="number" step="0.01" required value={formJual.jumlahJual} onChange={(e) => setFormJual({ ...formJual, jumlahJual: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Harga Jual Per Satuan (Rp)</label>
-                      <input type="number" required value={formJual.hargaJualSatuan} onChange={(e) => setFormJual({ ...formJual, hargaJualSatuan: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">PIC Penjual / Toko Pembeli</label>
-                    <input type="text" required placeholder="e.g. Toko Emas Antam Jaya" value={formJual.tokoPembeli} onChange={(e) => setFormJual({ ...formJual, tokoPembeli: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                  </div>
-                  <button type="submit" disabled={loading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow">
-                    Selesaikan Penjualan ➔
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {/* TAB 4: DASHBOARD & REKAP LAPORAN */}
+            {/* TAB 4: LAPORAN TRANSAKSI */}
             {activeTab === 'dashboard' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                    <span className="text-xs font-semibold text-slate-400 uppercase">Total Barang Mentah</span>
-                    <p className="text-2xl font-black text-slate-800 mt-1">{totalBarangKotor.toFixed(2)} <span className="text-sm font-normal">Gram</span></p>
-                    <span className="text-xs text-slate-500 mt-1 block">Modal Beli: {formatRupiah(totalBeliModal)}</span>
-                  </div>
-                  <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                    <span className="text-xs font-semibold text-slate-400 uppercase">Hasil Perak Murni</span>
-                    <p className="text-2xl font-black text-blue-600 mt-1">{totalPerakMurni.toFixed(2)} <span className="text-sm font-normal">Gram</span></p>
-                  </div>
-                  <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                    <span className="text-xs font-semibold text-slate-400 uppercase">Total Omset Penjualan</span>
-                    <p className="text-2xl font-black text-emerald-600 mt-1">{formatRupiah(totalOmsetPenjualan)}</p>
-                  </div>
-                  {currentUser.role === 'Admin' && (
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                      <span className="text-xs font-semibold text-slate-400 uppercase">Total Laba Bersih</span>
-                      <p className="text-2xl font-black text-amber-600 mt-1">{formatRupiah(totalLabaBersih)}</p>
-                    </div>
-                  )}
+              <div className="bg-white rounded-xl shadow overflow-hidden">
+                <div className="p-4 border-b font-bold text-slate-800 flex justify-between items-center">
+                  <span>Daftar Rekap Transaksi (Sheet Transaksi)</span>
+                  <input type="text" placeholder="🔍 Cari..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="px-3 py-1 border rounded text-xs" />
                 </div>
-
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <h3 className="font-bold text-slate-800">Daftar Transaksi (Google Sheets - Sheet Transaksi)</h3>
-                    <input
-                      type="text"
-                      placeholder="🔍 Cari kode, tempat, pengolah..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="px-3 py-1.5 border rounded-lg text-xs outline-none w-full md:w-64"
-                    />
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-900 text-white uppercase text-[10px] font-bold">
-                        <tr>
-                          <th className="px-3 py-3">Kode Transaksi</th>
-                          <th className="px-3 py-3">Tanggal</th>
-                          <th className="px-3 py-3">Kode & Deskripsi Brg</th>
-                          <th className="px-3 py-3">PIC</th>
-                          <th className="px-3 py-3">Lokasi & Daerah</th>
-                          <th className="px-3 py-3 text-right">Total Jumlah Brg (g)</th>
-                          <th className="px-3 py-3 text-right">Total Harga</th>
-                          <th className="px-3 py-3 text-right">Biaya Aktifitas</th>
-                          <th className="px-3 py-3">PIC Pengolah</th>
-                          <th className="px-3 py-3 text-right">Hasil Pengolahan (g)</th>
-                          <th className="px-3 py-3 text-right">Biaya Pengolahan</th>
-                          <th className="px-3 py-3 text-center">Efisiensi</th>
-                          <th className="px-3 py-3">PIC Penjual / Toko</th>
-                          <th className="px-3 py-3 text-right">Total Jual</th>
-                          {currentUser.role === 'Admin' && <th className="px-3 py-3 text-right">Untung Bersih</th>}
-                          <th className="px-3 py-3 text-center">Status</th>
-                          {currentUser.role === 'Admin' && <th className="px-3 py-3 text-center">Aksi</th>}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-900 text-white font-bold uppercase text-[10px]">
+                      <tr>
+                        <th className="p-3">Kode</th>
+                        <th className="p-3">Tanggal</th>
+                        <th className="p-3">Kategori</th>
+                        <th className="p-3">PIC</th>
+                        <th className="p-3">Lokasi</th>
+                        <th className="p-3 text-right">Kotor (g)</th>
+                        <th className="p-3 text-right">Total Beli</th>
+                        <th className="p-3">Pengolah</th>
+                        <th className="p-3 text-right">Murni (g)</th>
+                        <th className="p-3 text-right">Biaya Olah</th>
+                        <th className="p-3 font-bold">PIC Penjual</th>
+                        <th className="p-3 text-right">Total Jual</th>
+                        <th className="p-3 text-right">Biaya Penjualan</th>
+                        <th className="p-3 text-right">Untung Bersih</th>
+                        <th className="p-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {filteredTransactions.map((t, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="p-3 font-bold">{t.id}</td>
+                          <td className="p-3">{t.tanggalAmbil}</td>
+                          <td className="p-3">{t.kategoriName}</td>
+                          <td className="p-3">{t.pengambil}</td>
+                          <td className="p-3">{t.tempatAmbil} ({t.lokasiAmbil})</td>
+                          <td className="p-3 text-right font-mono">{t.jumlahKotor}</td>
+                          <td className="p-3 text-right font-mono">{formatRupiah(t.totalBeli)}</td>
+                          <td className="p-3">{t.pengolah}</td>
+                          <td className="p-3 text-right font-mono font-bold text-blue-600">{t.jumlahMurni}</td>
+                          <td className="p-3 text-right font-mono">{formatRupiah(t.biayaOlah)}</td>
+                          <td className="p-3 font-semibold text-slate-700">{t.tokoPembeli}</td>
+                          <td className="p-3 text-right font-mono font-bold text-emerald-600">{formatRupiah(t.totalJual)}</td>
+                          <td className="p-3 text-right font-mono text-slate-500">{formatRupiah(t.biayaPenjualan)}</td>
+                          <td className="p-3 text-right font-mono font-bold text-amber-600">{formatRupiah(t.totalUntung)}</td>
+                          <td className="p-3 text-center">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100">{t.status}</span>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {filteredTransactions.length === 0 ? (
-                          <tr>
-                            <td colSpan="17" className="text-center py-6 text-slate-400">Belum ada data di Sheet Transaksi. Silakan input pembelian baru.</td>
-                          </tr>
-                        ) : (
-                          filteredTransactions.map((t, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50 transition">
-                              <td className="px-3 py-3 font-bold text-slate-700">{t.id}</td>
-                              <td className="px-3 py-3">{t.tanggalAmbil}</td>
-                              <td className="px-3 py-3 font-semibold text-slate-600">{t.kategoriName}</td>
-                              <td className="px-3 py-3">{t.pengambil}</td>
-                              <td className="px-3 py-3">
-                                <p className="font-semibold text-slate-800">{t.tempatAmbil || '-'}</p>
-                                <p className="text-[10px] text-slate-500">📍 {t.lokasiAmbil || '-'}</p>
-                              </td>
-                              <td className="px-3 py-3 text-right font-mono">{t.jumlahKotor}</td>
-                              <td className="px-3 py-3 text-right font-mono">{formatRupiah(t.totalBeli)}</td>
-                              <td className="px-3 py-3 text-right font-mono text-slate-500">{formatRupiah(t.biayaTransport)}</td>
-                              <td className="px-3 py-3 font-semibold">{t.pengolah}</td>
-                              <td className="px-3 py-3 text-right font-mono font-bold text-blue-600">{t.jumlahMurni}</td>
-                              <td className="px-3 py-3 text-right font-mono text-slate-500">{formatRupiah(t.biayaOlah)}</td>
-                              <td className="px-3 py-3 text-center font-bold text-blue-600">{t.efisiensi}%</td>
-                              <td className="px-3 py-3 font-semibold text-slate-800">{t.tokoPembeli}</td>
-                              <td className="px-3 py-3 text-right font-mono text-emerald-600">{formatRupiah(t.totalJual)}</td>
-                              {currentUser.role === 'Admin' && (
-                                <td className="px-3 py-3 text-right font-mono font-bold text-amber-600">{formatRupiah(t.totalUntung)}</td>
-                              )}
-                              <td className="px-3 py-3 text-center">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  t.status === 'TERJUAL' ? 'bg-emerald-100 text-emerald-800' :
-                                  t.status === 'SELESAI_OLAH' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'
-                                }`}>
-                                  {t.status}
-                                </span>
-                              </td>
-                              {currentUser.role === 'Admin' && (
-                                <td className="px-3 py-3 text-center">
-                                  <button
-                                    onClick={() => handleDeleteTransaction(t.id)}
-                                    className="text-red-500 hover:text-red-700 font-bold px-2 py-1 bg-red-50 hover:bg-red-100 rounded text-xs"
-                                    title="Hapus Transaksi Ini"
-                                  >
-                                    🗑️ Hapus
-                                  </button>
-                                </td>
-                              )}
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 5: KELOLA VARIAN BARANG */}
-            {activeTab === 'kategori' && currentUser.role === 'Admin' && (
-              <div className="max-w-3xl mx-auto space-y-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                  <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">➕ Tambah Varian Jenis Barang Baru</h3>
-                  <form onSubmit={handleAddCategory} className="flex flex-col sm:flex-row gap-3">
-                    <input type="text" placeholder="Kode (e.g. H)" required value={newCatCode} onChange={(e) => setNewCatCode(e.target.value)} className="w-full sm:w-28 px-3 py-2 border rounded-lg text-sm uppercase font-bold outline-none" />
-                    <input type="text" placeholder="Nama Varian Barang" required value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="flex-1 px-3 py-2 border rounded-lg text-sm outline-none" />
-                    <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-900 px-5 py-2 rounded-lg text-sm font-bold whitespace-nowrap">+ Tambah Varian</button>
-                  </form>
-                </div>
-
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                  <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">📋 Daftar Varian Jenis Barang (Tersimpan di Sheet 'Kategori')</h3>
-                  <div className="divide-y divide-slate-100 border rounded-lg overflow-hidden">
-                    {categories.map((cat) => (
-                      <div key={cat.code} className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50 transition">
-                        {editingCatCode === cat.code ? (
-                          <div className="flex items-center gap-2 flex-1">
-                            <span className="font-bold text-xs bg-slate-200 px-2.5 py-1 rounded">[{cat.code}]</span>
-                            <input type="text" value={editCatNameText} onChange={(e) => setEditCatNameText(e.target.value)} className="flex-1 px-2.5 py-1 border rounded text-xs outline-none" />
-                            <button onClick={() => handleSaveEditCategory(cat.code)} className="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold">Simpan</button>
-                            <button onClick={() => setEditingCatCode(null)} className="bg-slate-300 text-slate-700 px-3 py-1 rounded text-xs font-bold">Batal</button>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs bg-amber-100 text-amber-800 px-2.5 py-1 rounded">[{cat.code}]</span>
-                              <span className="text-sm font-semibold text-slate-700">{cat.name}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => { setEditingCatCode(cat.code); setEditCatNameText(cat.name); }} className="text-blue-600 text-xs font-bold px-2 py-1 bg-blue-50 rounded">✏ Edit</button>
-                              <button onClick={() => handleDeleteCategory(cat.code)} className="text-red-500 text-xs font-bold px-2 py-1 bg-red-50 rounded">🗑️ Hapus</button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
