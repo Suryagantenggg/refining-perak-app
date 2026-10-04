@@ -16,7 +16,7 @@
     const { useState, useEffect } = React;
 
     // URL Web App Google Apps Script Terbaru Anda
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzDO_vlG5ae_Et3-Yv2TOu1Ehu9Otd9NY2myEGkw7abwbWVYbzHxXNJ62hiC0EhdtKk/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyfaH2Lv6hEpPXrFASLMaI9OKKg2Dg8eYsIWSfC5Gh2vV3UgdE3TS9MEP229nsNSI3Q/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -224,7 +224,7 @@
                 totalJual: parseFloat(row[15]) || 0,
                 totalUntung: parseFloat(row[16]) || 0,
                 status: row[17] || 'MENUNGGU_OLAH'
-              }));
+              })).filter(t => t.id !== '');
               setTransactions(formattedTrx);
             } else {
               setTransactions([]);
@@ -321,8 +321,16 @@
 
         const selectedCat = categories.find(c => c.code === formAmbil.kategoriCode) || categories[0] || { code: 'A', name: 'Umum' };
         
-        const nextNum = transactions.length + 1;
-        const newId = `TRX-${String(nextNum).padStart(3, '0')}`;
+        // Cari nomor ID tertinggi yang ada di state transaksi agar tidak terjadi penimpaan
+        let maxNum = 0;
+        transactions.forEach(t => {
+          const match = t.id.match(/TRX-(\d+)/i);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNum) maxNum = num;
+          }
+        });
+        const newId = `TRX-${String(maxNum + 1).padStart(3, '0')}`;
 
         const newTrx = {
           id: newId,
