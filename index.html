@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Refining Perak System - Filter Laporan & Biaya</title>
+  <title>Refining Perak System - Input Tanggal Pengolahan</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,7 +16,7 @@
     const { useState, useEffect } = React;
 
     // URL Web App Google Apps Script Terbaru Anda
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby2B_R0C4fSdVnesvWCQymBHVl214Dt2rUOP8Ugd-pYykONSpoYsXAif9cQvm4FMQeG/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzs1u4-r41tG4A9eVFHFYTFHKg2EirODbpiZhsHFgEjJ1qLLWE2VIO_1uxVcWD0dTtc/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -69,7 +69,6 @@
         setTimeout(() => setToastMsg(''), 4000);
       };
 
-      // FETCH CATEGORIES DARI GOOGLE SHEETS
       const loadCategoriesFromSheets = () => {
         fetch(SCRIPT_URL + '?type=categories&t=' + new Date().getTime())
           .then(res => res.json())
@@ -107,12 +106,10 @@
         });
       };
 
-      // HANDLE LOGIN
       const handleLoginSubmit = (e) => {
         e.preventDefault();
         setLoading(true);
         setAuthError('');
-        setAuthSuccess('');
 
         fetch(SCRIPT_URL + '?type=users&t=' + new Date().getTime())
           .then(res => res.json())
@@ -125,11 +122,7 @@
               );
 
               if (userMatch) {
-                const userObj = {
-                  nama: userMatch[0],
-                  username: userMatch[1],
-                  role: userMatch[3] || 'Petugas'
-                };
+                const userObj = { nama: userMatch[0], username: userMatch[1], role: userMatch[3] || 'Petugas' };
                 setCurrentUser(userObj);
                 localStorage.setItem('perak_user_session', JSON.stringify(userObj));
                 showToast(`Selamat datang, ${userObj.nama}!`);
@@ -137,7 +130,7 @@
                 setAuthError('Username atau Password salah!');
               }
             } else {
-              setAuthError('Data akun tidak ditemukan di Google Sheets Users.');
+              setAuthError('Data akun tidak ditemukan!');
             }
           })
           .catch(() => {
@@ -146,7 +139,6 @@
           });
       };
 
-      // HANDLE SIGN UP
       const handleSignUpSubmit = (e) => {
         e.preventDefault();
         if (!signupNama.trim() || !signupUsername.trim() || !signupPassword.trim()) {
@@ -155,7 +147,6 @@
 
         setLoading(true);
         setAuthError('');
-        setAuthSuccess('');
 
         const payload = {
           action: 'REGISTER_USER',
@@ -174,7 +165,7 @@
         .then(() => {
           setTimeout(() => {
             setLoading(false);
-            setAuthSuccess('🎉 Akun berhasil dibuat! Silakan masuk dengan username & password Anda.');
+            setAuthSuccess('🎉 Akun berhasil dibuat! Silakan masuk.');
             setLoginUsername(signupUsername.trim());
             setSignupNama('');
             setSignupUsername('');
@@ -205,7 +196,6 @@
         return d.toISOString().split('T')[0];
       };
 
-      // FETCH DATA DARI SHEET TRANSAKSI (30 KOLOM)
       const loadDataFromSheets = () => {
         if (!currentUser) return;
         setLoading(true);
@@ -236,6 +226,7 @@
                   jumlahMurni: murni,
                   biayaOlah: parseFloat(row[11]) || 0,
                   efisiensi: parseFloat(row[12]) || 0,
+                  tanggalOlah: formatCleanDate(row[13]),
                   tanggalPenjualan: formatCleanDate(row[21]),
                   tokoPembeli: row[28] || '-',
                   jumlahJual: parseFloat(row[25]) || 0,
@@ -274,15 +265,16 @@
         biayaTransport: ''
       });
 
-      // FORM PENGOLAHAN (MULTI-SELECT)
+      // FORM PENGOLAHAN (DENGAN TANGGAL PENGOLAHAN)
       const [formOlah, setFormOlah] = useState({
         selectedTrxIds: [],
+        tanggalOlah: new Date().toISOString().split('T')[0],
         pengolahSelect: currentUser ? currentUser.nama : 'Zaenal',
         jumlahMurni: '',
         biayaOlah: ''
       });
 
-      // FORM PENJUALAN (MULTI-SELECT)
+      // FORM PENJUALAN
       const [formJual, setFormJual] = useState({
         selectedTrxIds: [],
         tanggalJual: new Date().toISOString().split('T')[0],
@@ -324,25 +316,18 @@
 
       const handleSavePengambilan = (e) => {
         e.preventDefault();
-        const pengambilFinal = formAmbil.pengambilSelect.trim();
-        if (!pengambilFinal || !formAmbil.tempatAmbil.trim() || !formAmbil.lokasiAmbil.trim()) {
-          return alert('Semua bidang sumber & lokasi harus diisi!');
-        }
-
         const kotor = parseFloat(formAmbil.jumlahKotor) || 0;
         const hargaBeli = parseFloat(formAmbil.hargaBeliSatuan) || 0;
         const transport = parseFloat(formAmbil.biayaTransport) || 0;
 
-        if (kotor <= 0 || hargaBeli <= 0) return alert('Jumlah kotor dan harga beli harus > 0!');
-
-        const selectedCat = categories.find(c => c.code === formAmbil.kategoriCode) || categories[0] || { code: 'A', name: 'Umum' };
+        const selectedCat = categories.find(c => c.code === formAmbil.kategoriCode) || categories[0];
 
         const payload = {
           tanggalAmbil: formAmbil.tanggal,
           kategoriName: `[${selectedCat.code}] ${selectedCat.name}`,
-          pengambil: pengambilFinal,
-          tempatAmbil: formAmbil.tempatAmbil.trim(),
-          lokasiAmbil: formAmbil.lokasiAmbil.trim(),
+          pengambil: formAmbil.pengambilSelect,
+          tempatAmbil: formAmbil.tempatAmbil,
+          lokasiAmbil: formAmbil.lokasiAmbil,
           jumlahKotor: kotor,
           totalBeli: kotor * hargaBeli,
           biayaTransport: transport
@@ -353,14 +338,12 @@
         setActiveTab('dashboard');
       };
 
-      // TOGGLE SELECT PENGOLAHAN
       const handleToggleSelectOlah = (id) => {
         const current = formOlah.selectedTrxIds;
         if (current.includes(id)) setFormOlah({ ...formOlah, selectedTrxIds: current.filter(x => x !== id) });
         else setFormOlah({ ...formOlah, selectedTrxIds: [...current, id] });
       };
 
-      // TOGGLE SELECT PENJUALAN
       const handleToggleSelectJual = (id) => {
         const current = formJual.selectedTrxIds;
         if (current.includes(id)) setFormJual({ ...formJual, selectedTrxIds: current.filter(x => x !== id) });
@@ -390,6 +373,7 @@
 
           return {
             ...t,
+            tanggalOlah: formOlah.tanggalOlah,
             pengolah: formOlah.pengolahSelect.trim(),
             jumlahMurni: murniItem,
             biayaOlah: biayaItem,
@@ -398,11 +382,10 @@
         });
 
         sendToGoogleSheets({ action: 'BATCH_UPDATE_OLAH', items: updatedItems }, '🧪 Data Pemurnian berhasil di-update di Sheet Transaksi!');
-        setFormOlah({ selectedTrxIds: [], pengolahSelect: currentUser.nama, jumlahMurni: '', biayaOlah: '' });
+        setFormOlah({ selectedTrxIds: [], tanggalOlah: new Date().toISOString().split('T')[0], pengolahSelect: currentUser.nama, jumlahMurni: '', biayaOlah: '' });
         setActiveTab('dashboard');
       };
 
-      // PROSES PENJUALAN MULTI-SELECT
       const selectedTrxJualList = transactions.filter(t => formJual.selectedTrxIds.includes(t.id));
       const totalMurniJualSelected = selectedTrxJualList.reduce((sum, t) => sum + t.jumlahMurni, 0);
       const hargaJualVal = parseFloat(formJual.hargaJualSatuan) || 0;
@@ -558,7 +541,6 @@
       const pendingOlahList = transactions.filter(t => t.status === 'MENUNGGU_OLAH');
       const pendingJualList = transactions.filter(t => t.status === 'SELESAI_OLAH');
 
-      // JIKA BELUM LOGIN
       if (!currentUser) {
         return (
           <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4 py-8">
@@ -692,7 +674,6 @@
         );
       }
 
-      // JIKA SUDAH LOGIN
       return (
         <div className="min-h-screen bg-slate-100 text-slate-800 font-sans relative">
           
@@ -781,7 +762,7 @@
                       activeTab === 'kategori' ? 'border-amber-500 text-amber-400 bg-slate-900/50' : 'border-transparent text-slate-300 hover:text-white'
                     }`}
                   >
-                    ⚙️️ Varian Jenis Barang
+                    ⚙ Varian Jenis Barang
                   </button>
                 )}
               </div>
@@ -866,7 +847,7 @@
               </div>
             )}
 
-            {/* TAB 2: PENGOLAHAN */}
+            {/* TAB 2: PENGOLAHAN (DENGAN INPUT TANGGAL PENGOLAHAN) */}
             {activeTab === 'pengolahan' && (
               <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
                 <div className="bg-slate-900 text-white p-6">
@@ -924,9 +905,21 @@
                     </div>
                   )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">PIC Pengolah</label>
-                    <input type="text" required placeholder="e.g. Zaenal" value={formOlah.pengolahSelect} onChange={(e) => setFormOlah({ ...formOlah, pengolahSelect: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Tanggal Pengolahan</label>
+                      <input 
+                        type="date" 
+                        required 
+                        value={formOlah.tanggalOlah} 
+                        onChange={(e) => setFormOlah({ ...formOlah, tanggalOlah: e.target.value })} 
+                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">PIC Pengolah</label>
+                      <input type="text" required placeholder="e.g. Zaenal" value={formOlah.pengolahSelect} onChange={(e) => setFormOlah({ ...formOlah, pengolahSelect: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -998,7 +991,7 @@
                                 />
                                 <div>
                                   <p className="font-bold text-xs text-slate-800">{t.id} - {t.kategoriName}</p>
-                                  <p className="text-[11px] text-slate-500">PIC Pengolah: {t.pengolah} | Tanggal Olah: {t.tanggalAmbil}</p>
+                                  <p className="text-[11px] text-slate-500">PIC Pengolah: {t.pengolah} | Tanggal Olah: {t.tanggalOlah || t.tanggalAmbil}</p>
                                 </div>
                               </div>
                               <div className="text-right">
@@ -1178,7 +1171,8 @@
                       <thead className="bg-slate-900 text-white uppercase text-[10px] font-bold">
                         <tr>
                           <th className="px-3 py-3">Kode Transaksi</th>
-                          <th className="px-3 py-3">Tanggal</th>
+                          <th className="px-3 py-3">Tanggal Ambil</th>
+                          <th className="px-3 py-3">Tanggal Olah</th>
                           <th className="px-3 py-3">Kode & Deskripsi Brg</th>
                           <th className="px-3 py-3">PIC</th>
                           <th className="px-3 py-3">Lokasi & Daerah</th>
@@ -1200,13 +1194,14 @@
                       <tbody className="divide-y divide-slate-100">
                         {filteredTransactions.length === 0 ? (
                           <tr>
-                            <td colSpan="18" className="text-center py-6 text-slate-400">Tidak ada transaksi yang sesuai dengan filter.</td>
+                            <td colSpan="19" className="text-center py-6 text-slate-400">Tidak ada transaksi yang sesuai dengan filter.</td>
                           </tr>
                         ) : (
                           filteredTransactions.map((t, idx) => (
                             <tr key={idx} className="hover:bg-slate-50 transition">
                               <td className="px-3 py-3 font-bold text-slate-700">{t.id}</td>
                               <td className="px-3 py-3">{t.tanggalAmbil}</td>
+                              <td className="px-3 py-3">{t.tanggalOlah || '-'}</td>
                               <td className="px-3 py-3 font-semibold text-slate-600">{t.kategoriName}</td>
                               <td className="px-3 py-3">{t.pengambil}</td>
                               <td className="px-3 py-3">
