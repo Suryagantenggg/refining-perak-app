@@ -16,7 +16,7 @@
     const { useState, useEffect } = React;
 
     // URL Web App Google Apps Script Terbaru Anda
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyfaH2Lv6hEpPXrFASLMaI9OKKg2Dg8eYsIWSfC5Gh2vV3UgdE3TS9MEP229nsNSI3Q/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyb9z93q8-YWA1A6gGrUeQ47xbfhNvY5IRBADlhfX2wI4znkiIcH9R8vZXsN89TKF8_/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -321,7 +321,6 @@
 
         const selectedCat = categories.find(c => c.code === formAmbil.kategoriCode) || categories[0] || { code: 'A', name: 'Umum' };
         
-        // Cari nomor ID tertinggi yang ada di state transaksi agar tidak terjadi penimpaan
         let maxNum = 0;
         transactions.forEach(t => {
           const match = t.id.match(/TRX-(\d+)/i);
@@ -401,7 +400,7 @@
 
         sendToGoogleSheets(
           { action: 'BATCH_UPDATE_OLAH', items: updatedItems },
-          `🧪 Pemurnian ${updatedItems.length} transaksi berhasil di-update! Status: SELESAI OLAH`
+          `🧪 Pemurnian ${updatedItems.length} transaksi dicatat ke Sheet Pengolahan & Pembelian!`
         );
 
         setFormOlah({ selectedTrxIds: [], pengolahSelect: currentUser.nama, jumlahMurni: '', biayaOlah: '' });
