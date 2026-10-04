@@ -15,8 +15,8 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    // URL Web App Google Apps Script
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwwMMmcw4lN9hHwZtoCupjPq2SwhixgCDi4riSrcbs_bNFYWIyOuQuR7G6_Y1JPGalJww/exec";
+    // URL Web App Terbaru Anda
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwz-bXvDU38dM3hEjcStGmWibH0nSgwISjv8JcVeVRQ7EU5y0K2-RC4wuUJclc68tpO/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -35,11 +35,10 @@
         return saved ? JSON.parse(saved) : null;
       });
 
-      const [authMode, setAuthMode] = useState('login'); // 'login' ATAU 'signup'
+      const [authMode, setAuthMode] = useState('login');
       const [loginUsername, setLoginUsername] = useState('');
       const [loginPassword, setLoginPassword] = useState('');
 
-      // STATE FORM SIGN UP (Role otomatis 'Petugas')
       const [signupNama, setSignupNama] = useState('');
       const [signupUsername, setSignupUsername] = useState('');
       const [signupPassword, setSignupPassword] = useState('');
@@ -85,14 +84,14 @@
             setLoading(false);
             if (Array.isArray(usersData) && usersData.length > 1) {
               const userMatch = usersData.slice(1).find(row => 
-                String(row[0]).trim().toLowerCase() === loginUsername.trim().toLowerCase() && 
-                String(row[1]).trim() === loginPassword.trim()
+                String(row[1]).trim().toLowerCase() === loginUsername.trim().toLowerCase() && 
+                String(row[2]).trim() === loginPassword.trim()
               );
 
               if (userMatch) {
                 const userObj = {
-                  username: userMatch[0],
-                  nama: userMatch[2] || userMatch[0],
+                  nama: userMatch[0],
+                  username: userMatch[1],
                   role: userMatch[3] || 'Petugas'
                 };
                 setCurrentUser(userObj);
@@ -111,7 +110,7 @@
           });
       };
 
-      // HANDLE SIGN UP / REGISTRASI (ROLE OTOMATIS PETUGAS)
+      // HANDLE SIGN UP
       const handleSignUpSubmit = (e) => {
         e.preventDefault();
         if (!signupNama.trim() || !signupUsername.trim() || !signupPassword.trim()) {
@@ -127,7 +126,7 @@
           nama: signupNama.trim(),
           username: signupUsername.trim(),
           password: signupPassword.trim(),
-          role: 'Petugas' // Otomatis diset sebagai Petugas
+          role: 'Petugas'
         };
 
         fetch(SCRIPT_URL, {
@@ -207,6 +206,7 @@
         }
       }, [currentUser]);
 
+      // FORM PENGAMBILAN
       const [formAmbil, setFormAmbil] = useState({
         tanggal: new Date().toISOString().split('T')[0],
         pengambilSelect: currentUser ? currentUser.nama : 'Andi',
@@ -218,13 +218,15 @@
         biayaTransport: ''
       });
 
+      // FORM PENGOLAHAN (DENGAN MULTI-SELECT ITEM TRANSAKSI)
       const [formOlah, setFormOlah] = useState({
-        trxId: '',
+        selectedTrxIds: [],
         pengolahSelect: currentUser ? currentUser.nama : 'Zaenal',
         jumlahMurni: '',
         biayaOlah: ''
       });
 
+      // FORM PENJUALAN
       const [formJual, setFormJual] = useState({
         trxId: '',
         tanggalJual: new Date().toISOString().split('T')[0],
@@ -311,30 +313,55 @@
         setActiveTab('dashboard');
       };
 
+      // PROSES PENGOLAHAN MULTI-ITEM
+      const handleToggleSelectTrx = (id) => {
+        const current = formOlah.selectedTrxIds;
+        if (current.includes(id)) {
+          setFormOlah({ ...formOlah, selectedTrxIds: current.filter(x => x !== id) });
+        } else {
+          setFormOlah({ ...formOlah, selectedTrxIds: [...current, id] });
+        }
+      };
+
+      // Hitung total kotor dari transaksi terpilih
+      const selectedTrxList = transactions.filter(t => formOlah.selectedTrxIds.includes(t.id));
+      const totalKotorSelected = selectedTrxList.reduce((sum, t) => sum + t.jumlahKotor, 0);
+      const totalModalSelected = selectedTrxList.reduce((sum, t) => sum + t.totalBeli, 0);
+
+      const murniVal = parseFloat(formOlah.jumlahMurni) || 0;
+      const totalBiayaOlahVal = parseFloat(formOlah.biayaOlah) || 0;
+      const penyusutanGram = totalKotorSelected > 0 && murniVal > 0 ? (totalKotorSelected - murniVal) : 0;
+      const persentaseSusut = totalKotorSelected > 0 && murniVal > 0 ? ((penyusutanGram / totalKotorSelected) * 100).toFixed(2) : 0;
+      const overallEfisiensi = totalKotorSelected > 0 && murniVal > 0 ? ((murniVal / totalKotorSelected) * 100).toFixed(2) : 0;
+
       const handleSavePengolahan = (e) => {
         e.preventDefault();
-        if (!formOlah.trxId) return alert('Pilih transaksi yang akan diolah!');
-        
-        const murni = parseFloat(formOlah.jumlahMurni) || 0;
-        const olah = parseFloat(formOlah.biayaOlah) || 0;
-        if (murni <= 0) return alert('Jumlah murni harus > 0!');
+        if (formOlah.selectedTrxIds.length === 0) return alert('Pilih minimal 1 transaksi barang masuk yang akan diolah!');
+        if (murniVal <= 0) return alert('Hasil Perak Murni harus > 0!');
 
-        const t = transactions.find(x => x.id === formOlah.trxId);
-        if (!t) return;
+        // Bagi hasil murni & biaya olah proporsional sesuai berat kotor masing-masing item
+        const updatedItems = selectedTrxList.map(t => {
+          const porsiGram = t.jumlahKotor / totalKotorSelected;
+          const murniItem = parseFloat((murniVal * porsiGram).toFixed(2));
+          const biayaOlahItem = parseFloat((totalBiayaOlahVal * porsiGram).toFixed(0));
+          const efisiensiItem = parseFloat(((murniItem / t.jumlahKotor) * 100).toFixed(2));
 
-        const efisiensi = parseFloat(((murni / t.jumlahKotor) * 100).toFixed(2));
+          return {
+            ...t,
+            pengolah: formOlah.pengolahSelect.trim(),
+            jumlahMurni: murniItem,
+            biayaOlah: biayaOlahItem,
+            efisiensi: efisiensiItem,
+            status: 'SELESAI_OLAH'
+          };
+        });
 
-        const updatedTrx = {
-          ...t,
-          pengolah: formOlah.pengolahSelect.trim(),
-          jumlahMurni: murni,
-          biayaOlah: olah,
-          efisiensi: efisiensi,
-          status: 'SELESAI_OLAH'
-        };
+        sendToGoogleSheets(
+          { action: 'BATCH_UPDATE_OLAH', items: updatedItems },
+          `🧪 Pemurnian ${updatedItems.length} transaksi berhasil di-update! Status: SELESAI OLAH`
+        );
 
-        sendToGoogleSheets(updatedTrx, `🧪 Pemurnian ${t.id} berhasil di-update! Status: SELESAI OLAH`);
-        setFormOlah({ trxId: '', pengolahSelect: currentUser.nama, jumlahMurni: '', biayaOlah: '' });
+        setFormOlah({ selectedTrxIds: [], pengolahSelect: currentUser.nama, jumlahMurni: '', biayaOlah: '' });
         setActiveTab('dashboard');
       };
 
@@ -430,7 +457,6 @@
                 <p className="text-xs text-slate-500 mt-1">Sistem Manajemen Pengolahan & Penjualan Perak</p>
               </div>
 
-              {/* TOGGLE TAB LOGIN / SIGN UP */}
               <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
                 <button
                   onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess(''); }}
@@ -462,7 +488,6 @@
                 </div>
               )}
 
-              {/* FORM LOGIN */}
               {authMode === 'login' && (
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
@@ -496,7 +521,6 @@
                 </form>
               )}
 
-              {/* FORM SIGN UP (ROLE TANPA INPUT - OTOMATIS PETUGAS) */}
               {authMode === 'signup' && (
                 <form onSubmit={handleSignUpSubmit} className="space-y-4">
                   <div>
@@ -549,7 +573,7 @@
         );
       }
 
-      // JIKA SUDAH LOGIN: TAMPILKAN APLIKASI
+      // JIKA SUDAH LOGIN
       return (
         <div className="min-h-screen bg-slate-100 text-slate-800 font-sans relative">
           
@@ -723,38 +747,107 @@
               </div>
             )}
 
-            {/* TAB 2: PENGOLAHAN */}
+            {/* TAB 2: PENGOLAHAN (DENGAN MULTI-SELECT & FITUR EFISIENSI/PENYUSUTAN) */}
             {activeTab === 'pengolahan' && (
-              <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+              <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
                 <div className="bg-slate-900 text-white p-6">
-                  <h2 className="text-lg font-bold">🧪 Input Pengolahan & Pemurnian</h2>
+                  <h2 className="text-lg font-bold">🧪 Input Pengolahan & Pemurnian (Multi-Select Transaksi)</h2>
+                  <p className="text-xs text-slate-300 mt-1">Pilih satu atau beberapa transaksi pembelian barang kotor yang akan diolah sekaligus.</p>
                 </div>
-                <form onSubmit={handleSavePengolahan} className="p-6 space-y-4">
+                <form onSubmit={handleSavePengolahan} className="p-6 space-y-6">
+                  
+                  {/* PILIH MULTIPLE TRANSAKSI */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Pilih Transaksi Barang Masuk</label>
-                    <select required value={formOlah.trxId} onChange={(e) => setFormOlah({ ...formOlah, trxId: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm bg-white font-bold">
-                      <option value="">-- Pilih Antrean Transaksi --</option>
-                      {pendingOlahList.map((t) => (
-                        <option key={t.id} value={t.id}>{t.id} | {t.kategoriName} | Kotor: {t.jumlahKotor}g ({t.tempatAmbil})</option>
-                      ))}
-                    </select>
+                    <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                      Pilih Item Transaksi Masuk ({formOlah.selectedTrxIds.length} Dipilih)
+                    </label>
+                    {pendingOlahList.length === 0 ? (
+                      <div className="p-4 bg-slate-50 border rounded-lg text-xs text-slate-500 text-center">
+                        Tidak ada antrean barang mentah yang belum diolah.
+                      </div>
+                    ) : (
+                      <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                        {pendingOlahList.map((t) => {
+                          const isChecked = formOlah.selectedTrxIds.includes(t.id);
+                          return (
+                            <label key={t.id} className={`flex items-center justify-between p-3 cursor-pointer transition ${isChecked ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleToggleSelectTrx(t.id)}
+                                  className="w-4 h-4 text-amber-500 rounded focus:ring-amber-400"
+                                />
+                                <div>
+                                  <p className="font-bold text-xs text-slate-800">{t.id} - {t.kategoriName}</p>
+                                  <p className="text-[11px] text-slate-500">📍 {t.tempatAmbil} ({t.lokasiAmbil}) | Pengambil: {t.pengambil}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-mono font-bold text-xs text-slate-700">{t.jumlahKotor} Gram</p>
+                                <p className="text-[10px] text-slate-400">{formatRupiah(t.totalBeli)}</p>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
+
+                  {/* AKUMULASI DARI ITEM TERPILIH */}
+                  {selectedTrxList.length > 0 && (
+                    <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl grid grid-cols-2 gap-4 text-slate-800">
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase block">Total Bahan Kotor Terpilih</span>
+                        <p className="text-xl font-black text-slate-900 mt-0.5">{totalKotorSelected.toFixed(2)} <span className="text-xs font-normal">Gram</span></p>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase block">Total Modal Beli</span>
+                        <p className="text-xl font-black text-slate-900 mt-0.5">{formatRupiah(totalModalSelected)}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FORM INPUT HASIL & BIAYA */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Pengolah</label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nama Pengolah / Refining Operator</label>
                     <input type="text" required placeholder="e.g. Zaenal" value={formOlah.pengolahSelect} onChange={(e) => setFormOlah({ ...formOlah, pengolahSelect: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
                   </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Hasil Perak Murni (Gram)</label>
-                      <input type="number" step="0.01" required value={formOlah.jumlahMurni} onChange={(e) => setFormOlah({ ...formOlah, jumlahMurni: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Hasil Perak Murni Dimurnikan (Gram)</label>
+                      <input type="number" step="0.01" required value={formOlah.jumlahMurni} onChange={(e) => setFormOlah({ ...formOlah, jumlahMurni: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm font-bold text-blue-700" placeholder="e.g. 85.5" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Biaya Pengolahan (Rp)</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Total Biaya Pengolahan / Bahan Kimia (Rp)</label>
                       <input type="number" placeholder="e.g. 100000" value={formOlah.biayaOlah} onChange={(e) => setFormOlah({ ...formOlah, biayaOlah: e.target.value })} className="w-full px-3 py-2 border rounded-lg text-sm" />
                     </div>
                   </div>
-                  <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow">
-                    Update Pemurnian ➔
+
+                  {/* KALKULATOR LIVE EFISIENSI & PENYUSUTAN */}
+                  {totalKotorSelected > 0 && murniVal > 0 && (
+                    <div className="p-4 bg-slate-900 text-white rounded-xl space-y-3">
+                      <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">📊 Analisis Efisiensi & Penyusutan Processing</h4>
+                      <div className="grid grid-cols-3 gap-2 text-center divide-x divide-slate-800">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Penyusutan (Gram)</span>
+                          <p className="text-sm font-black text-red-400 mt-0.5">-{penyusutanGram.toFixed(2)} g</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Persentase Susut</span>
+                          <p className="text-sm font-black text-red-400 mt-0.5">{persentaseSusut}%</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Rendemen / Efisiensi</span>
+                          <p className="text-sm font-black text-emerald-400 mt-0.5">{overallEfisiensi}%</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition">
+                    Simpan & Update Pemurnian ({selectedTrxList.length} Item) ➔
                   </button>
                 </form>
               </div>
@@ -930,7 +1023,7 @@
               </div>
             )}
 
-            {/* TAB 5: KELOLA VARIAN (KHUSUS ADMIN) */}
+            {/* TAB 5: KELOLA VARIAN */}
             {activeTab === 'kategori' && currentUser.role === 'Admin' && (
               <div className="max-w-3xl mx-auto space-y-6">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
