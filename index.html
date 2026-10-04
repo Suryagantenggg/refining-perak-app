@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Refining Perak System - Fix Tanggal Presisi</title>
+  <title>Refining Perak System - Laba Bersih Semua Role</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -188,13 +188,11 @@
       };
 
       // FUNGSI PERBAIKAN FORMAT TANGGAL
-      // Mengubah string ISO dari Google Sheets ke Tanggal Lokal Murni tanpa pergeseran Timezone UTC
       const formatCleanDate = (raw) => {
         if (!raw || raw === '0' || raw === 0 || raw === '-') return '';
         
         const str = String(raw).trim();
         
-        // Jika format string ISO dari Google Sheets "YYYY-MM-DDT..."
         if (str.includes('T')) {
           const d = new Date(str);
           if (!isNaN(d.getTime())) {
@@ -206,12 +204,10 @@
           return str.split('T')[0];
         }
 
-        // Jika string berformat "YYYY-MM-DD..."
         if (str.match(/^\d{4}-\d{2}-\d{2}/)) {
           return str.substring(0, 10);
         }
 
-        // Jika format bawaan Date lain
         const d = new Date(str);
         if (isNaN(d.getTime())) return str;
         
@@ -1171,12 +1167,10 @@
                     <span className="text-xs font-semibold text-slate-400 uppercase">Total Omset Penjualan</span>
                     <p className="text-2xl font-black text-emerald-600 mt-1">{formatRupiah(totalOmsetPenjualan)}</p>
                   </div>
-                  {currentUser.role === 'Admin' && (
-                    <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                      <span className="text-xs font-semibold text-slate-400 uppercase">Total Laba Bersih</span>
-                      <p className="text-2xl font-black text-amber-600 mt-1">{formatRupiah(totalLabaBersih)}</p>
-                    </div>
-                  )}
+                  <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <span className="text-xs font-semibold text-slate-400 uppercase">Total Laba Bersih</span>
+                    <p className="text-2xl font-black text-amber-600 mt-1">{formatRupiah(totalLabaBersih)}</p>
+                  </div>
                 </div>
 
                 {/* REKAP BIAYA AKTIVITAS PER AKUN */}
@@ -1253,7 +1247,7 @@
                           <th className="px-3 py-3 font-bold">PIC Penjual</th>
                           <th className="px-3 py-3 text-right">Total Jual</th>
                           <th className="px-3 py-3 text-right">Biaya Penjualan</th>
-                          {currentUser.role === 'Admin' && <th className="px-3 py-3 text-right">Untung Bersih</th>}
+                          <th className="px-3 py-3 text-right">Untung Bersih</th>
                           <th className="px-3 py-3 text-center">Status</th>
                           {currentUser.role === 'Admin' && <th className="px-3 py-3 text-center">Aksi</th>}
                         </tr>
@@ -1286,9 +1280,7 @@
                               <td className="px-3 py-3 font-semibold text-slate-800">{t.tokoPembeli}</td>
                               <td className="px-3 py-3 text-right font-mono font-bold text-emerald-600">{formatRupiah(t.totalJual)}</td>
                               <td className="px-3 py-3 text-right font-mono text-slate-500">{formatRupiah(t.biayaPenjualan)}</td>
-                              {currentUser.role === 'Admin' && (
-                                <td className="px-3 py-3 text-right font-mono font-bold text-amber-600">{formatRupiah(t.totalUntung)}</td>
-                              )}
+                              <td className="px-3 py-3 text-right font-mono font-bold text-amber-600">{formatRupiah(t.totalUntung)}</td>
                               <td className="px-3 py-3 text-center">
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                                   t.status === 'TERJUAL' ? 'bg-emerald-100 text-emerald-800' :
