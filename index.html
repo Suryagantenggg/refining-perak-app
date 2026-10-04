@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Refining Perak System - Recap Biaya Aktivitas</title>
+  <title>Refining Perak System - Filter Laporan & Biaya</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -16,7 +16,7 @@
     const { useState, useEffect } = React;
 
     // URL Web App Google Apps Script Terbaru Anda
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzk6oHfi0_LG8GfnuKCw-_RKUkABw_6seYFOVzCH9wG1sH6wfrm1Efby3u_uMAWyhG1/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby2B_R0C4fSdVnesvWCQymBHVl214Dt2rUOP8Ugd-pYykONSpoYsXAif9cQvm4FMQeG/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -54,6 +54,10 @@
 
       const [transactions, setTransactions] = useState([]);
       const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+
+      // FILTER PERIODE TANGGAL & BULAN
+      const [startDate, setStartDate] = useState('');
+      const [endDate, setEndDate] = useState('');
 
       const [newCatCode, setNewCatCode] = useState('');
       const [newCatName, setNewCatName] = useState('');
@@ -191,6 +195,16 @@
         }
       };
 
+      const formatCleanDate = (raw) => {
+        if (!raw) return '';
+        if (typeof raw === 'string' && raw.includes('T')) {
+          return raw.split('T')[0];
+        }
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return String(raw);
+        return d.toISOString().split('T')[0];
+      };
+
       // FETCH DATA DARI SHEET TRANSAKSI (30 KOLOM)
       const loadDataFromSheets = () => {
         if (!currentUser) return;
@@ -210,7 +224,7 @@
 
                 return {
                   id: String(row[0] || '').trim(),
-                  tanggalAmbil: row[1] || '',
+                  tanggalAmbil: formatCleanDate(row[1]),
                   kategoriName: row[2] || '',
                   pengambil: row[3] || '',
                   tempatAmbil: row[4] || '-',
@@ -222,7 +236,7 @@
                   jumlahMurni: murni,
                   biayaOlah: parseFloat(row[11]) || 0,
                   efisiensi: parseFloat(row[12]) || 0,
-                  tanggalPenjualan: row[21] || '-',
+                  tanggalPenjualan: formatCleanDate(row[21]),
                   tokoPembeli: row[28] || '-',
                   jumlahJual: parseFloat(row[25]) || 0,
                   hargaJualSatuan: parseFloat(row[26]) || 0,
@@ -447,10 +461,45 @@
         }
       };
 
-      const pendingOlahList = transactions.filter(t => t.status === 'MENUNGGU_OLAH');
-      const pendingJualList = transactions.filter(t => t.status === 'SELESAI_OLAH');
+      // PRESET FILTER BULAN / PERIODE
+      const handleSetMonthFilter = (year, monthIndex) => {
+        const start = new Date(year, monthIndex, 1);
+        const end = new Date(year, monthIndex + 1, 0);
+        
+        const formatYYYYMMDD = (d) => d.toISOString().split('T')[0];
+        setStartDate(formatYYYYMMDD(start));
+        setEndDate(formatYYYYMMDD(end));
+      };
 
-      const filteredTransactions = transactions.filter(t => {
+      const handleQuickFilter = (type) => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+
+        if (type === 'THIS_MONTH') {
+          handleSetMonthFilter(year, month);
+        } else if (type === 'LAST_MONTH') {
+          handleSetMonthFilter(month === 0 ? year - 1 : year, month === 0 ? 11 : month - 1);
+        } else if (type === 'THIS_YEAR') {
+          setStartDate(`${year}-01-01`);
+          setEndDate(`${year}-12-31`);
+        } else if (type === 'CLEAR') {
+          setStartDate('');
+          setEndDate('');
+        }
+      };
+
+      // FILTERING TRANSAKSI
+      const dateFilteredTransactions = transactions.filter(t => {
+        const tDate = t.tanggalAmbil;
+        if (!tDate) return true;
+
+        if (startDate && tDate < startDate) return false;
+        if (endDate && tDate > endDate) return false;
+        return true;
+      });
+
+      const filteredTransactions = dateFilteredTransactions.filter(t => {
         const term = searchTerm.toLowerCase();
         return (
           t.id.toLowerCase().includes(term) ||
@@ -463,18 +512,17 @@
         );
       });
 
-      const totalBarangKotor = transactions.reduce((acc, t) => acc + (t.jumlahKotor || 0), 0);
-      const totalPerakMurni = transactions.reduce((acc, t) => acc + (t.jumlahMurni || 0), 0);
-      const totalBeliModal = transactions.reduce((acc, t) => acc + (t.totalBeli || 0), 0);
-      const totalOmsetPenjualan = transactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalJual || 0), 0);
-      const totalLabaBersih = transactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalUntung || 0), 0);
+      const totalBarangKotor = filteredTransactions.reduce((acc, t) => acc + (t.jumlahKotor || 0), 0);
+      const totalPerakMurni = filteredTransactions.reduce((acc, t) => acc + (t.jumlahMurni || 0), 0);
+      const totalBeliModal = filteredTransactions.reduce((acc, t) => acc + (t.totalBeli || 0), 0);
+      const totalOmsetPenjualan = filteredTransactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalJual || 0), 0);
+      const totalLabaBersih = filteredTransactions.filter(t => t.status === 'TERJUAL').reduce((acc, t) => acc + (t.totalUntung || 0), 0);
 
-      // KHUSUS FITUR REKAP BIAYA AKTIVITAS PER AKUN
+      // REKAP BIAYA AKTIVITAS PER AKUN
       const getAccountActivityRecap = () => {
         const recapMap = {};
 
-        transactions.forEach(t => {
-          // 1. Biaya Transport (PIC Pembelian)
+        dateFilteredTransactions.forEach(t => {
           if (t.pengambil && t.pengambil !== '-') {
             const pic = t.pengambil.trim();
             if (!recapMap[pic]) recapMap[pic] = { transport: 0, olah: 0, jual: 0, count: 0 };
@@ -482,14 +530,12 @@
             recapMap[pic].count += 1;
           }
 
-          // 2. Biaya Pengolahan (PIC Pengolah)
           if (t.pengolah && t.pengolah !== '-') {
             const pic = t.pengolah.trim();
             if (!recapMap[pic]) recapMap[pic] = { transport: 0, olah: 0, jual: 0, count: 0 };
             recapMap[pic].olah += (t.biayaOlah || 0);
           }
 
-          // 3. Biaya Penjualan (PIC Penjual)
           if (t.tokoPembeli && t.tokoPembeli !== '-') {
             const pic = t.tokoPembeli.trim();
             if (!recapMap[pic]) recapMap[pic] = { transport: 0, olah: 0, jual: 0, count: 0 };
@@ -508,6 +554,9 @@
       };
 
       const accountRecapList = getAccountActivityRecap();
+
+      const pendingOlahList = transactions.filter(t => t.status === 'MENUNGGU_OLAH');
+      const pendingJualList = transactions.filter(t => t.status === 'SELESAI_OLAH');
 
       // JIKA BELUM LOGIN
       if (!currentUser) {
@@ -732,7 +781,7 @@
                       activeTab === 'kategori' ? 'border-amber-500 text-amber-400 bg-slate-900/50' : 'border-transparent text-slate-300 hover:text-white'
                     }`}
                   >
-                    ⚙️ Varian Jenis Barang
+                    ⚙️️ Varian Jenis Barang
                   </button>
                 )}
               </div>
@@ -1003,6 +1052,51 @@
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
                 
+                {/* BAR FILTER PERIODE TANGGAL / BULAN */}
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                        📅 Filter Periode Tanggal Laporan
+                      </h3>
+                      <p className="text-[11px] text-slate-500">Pilih rentang tanggal untuk menyaring ringkasan metrik dan rekap biaya.</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button onClick={() => handleQuickFilter('THIS_MONTH')} className="px-3 py-1.5 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 border text-slate-700 text-xs font-bold rounded-lg transition">Bulan Ini</button>
+                      <button onClick={() => handleQuickFilter('LAST_MONTH')} className="px-3 py-1.5 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 border text-slate-700 text-xs font-bold rounded-lg transition">Bulan Lalu</button>
+                      <button onClick={() => handleQuickFilter('THIS_YEAR')} className="px-3 py-1.5 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 border text-slate-700 text-xs font-bold rounded-lg transition">Tahun Ini</button>
+                      <button onClick={() => handleQuickFilter('CLEAR')} className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition">Reset Filter</button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Dari Tanggal:</label>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full p-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Sampai Tanggal:</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full p-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <div className="text-xs text-slate-500 p-2 bg-slate-50 border rounded-lg w-full font-semibold">
+                        Menampilkan <b className="text-slate-900">{filteredTransactions.length}</b> dari {transactions.length} transaksi
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* RINGKASAN METRIK UTAMA */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
@@ -1034,7 +1128,7 @@
                   </div>
                   <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                     {accountRecapList.length === 0 ? (
-                      <p className="text-xs text-slate-400 col-span-3 text-center py-2">Belum ada transaksi dengan biaya aktivitas.</p>
+                      <p className="text-xs text-slate-400 col-span-3 text-center py-2">Tidak ada transaksi biaya aktivitas pada periode tanggal ini.</p>
                     ) : (
                       accountRecapList.map((acc, idx) => (
                         <div key={idx} className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
@@ -1106,7 +1200,7 @@
                       <tbody className="divide-y divide-slate-100">
                         {filteredTransactions.length === 0 ? (
                           <tr>
-                            <td colSpan="18" className="text-center py-6 text-slate-400">Belum ada data di Sheet Transaksi. Silakan input pembelian baru.</td>
+                            <td colSpan="18" className="text-center py-6 text-slate-400">Tidak ada transaksi yang sesuai dengan filter.</td>
                           </tr>
                         ) : (
                           filteredTransactions.map((t, idx) => (
