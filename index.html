@@ -15,8 +15,8 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    // URL Web App Terbaru Anda
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzCDKZTtoSKELkp6EU-cFJXG3wV-CcnmG8BzBOh-YLItoLOm0MhN06BvXluH5Dv6Qcf/exec";
+    // URL Web App Google Apps Script Terbaru Anda
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzDO_vlG5ae_Et3-Yv2TOu1Ehu9Otd9NY2myEGkw7abwbWVYbzHxXNJ62hiC0EhdtKk/exec";
 
     const DEFAULT_CATEGORIES = [
       { code: 'A', name: 'Pentolan Kontaktor' },
@@ -183,7 +183,7 @@
         })
         .catch(err => {
           setLoading(false);
-          setAuthError('Gagal mendaftarkan akun.');
+          alert('Gagal mendaftarkan akun.');
         });
       };
 
@@ -195,7 +195,7 @@
         }
       };
 
-      // FETCH DATA TRANSAKSI
+      // FETCH DATA TRANSAKSI DARI SHEET 'Pembelian'
       const loadDataFromSheets = () => {
         if (!currentUser) return;
         setLoading(true);
@@ -345,7 +345,7 @@
           status: 'MENUNGGU_OLAH'
         };
 
-        sendToGoogleSheets(newTrx, `🎉 Transaksi ${newId} berhasil dikirim ke Google Sheets!`);
+        sendToGoogleSheets(newTrx, `🎉 Transaksi ${newId} berhasil dikirim ke sheet Pembelian!`);
         setFormAmbil({ ...formAmbil, tempatAmbil: '', lokasiAmbil: '', jumlahKotor: '', hargaBeliSatuan: '', biayaTransport: '' });
         setActiveTab('dashboard');
       };
@@ -605,7 +605,7 @@
               )}
 
               <div className="mt-6 text-center text-[11px] text-slate-400">
-                Data akun tersimpan otomatis di Google Sheets
+                Data akun tersimpan otomatis di Google Sheets (Sheet: Users)
               </div>
             </div>
           </div>
@@ -780,7 +780,7 @@
                   </div>
 
                   <button type="submit" disabled={loading} className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-lg shadow">
-                    Simpan ke Google Sheets ➔
+                    Simpan ke Sheet Pembelian ➔
                   </button>
                 </form>
               </div>
@@ -960,7 +960,7 @@
 
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <h3 className="font-bold text-slate-800">Daftar Transaksi Single Line (Google Sheets)</h3>
+                    <h3 className="font-bold text-slate-800">Daftar Transaksi Single Line (Google Sheets - Tab Pembelian)</h3>
                     <input
                       type="text"
                       placeholder="🔍 Cari kode, tempat, pengolah..."
@@ -996,7 +996,7 @@
                       <tbody className="divide-y divide-slate-100">
                         {filteredTransactions.length === 0 ? (
                           <tr>
-                            <td colSpan="17" className="text-center py-6 text-slate-400">Belum ada data di Google Sheets. Silakan input pengambilan baru.</td>
+                            <td colSpan="17" className="text-center py-6 text-slate-400">Belum ada data di sheet Pembelian. Silakan input pengambilan baru.</td>
                           </tr>
                         ) : (
                           filteredTransactions.map((t, idx) => (
