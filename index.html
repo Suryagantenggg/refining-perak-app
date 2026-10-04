@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Refining Perak System - Filter Multi-Jenis Tanggal</title>
+  <title>Refining Perak System - Fix Tanggal Presisi</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -187,27 +187,39 @@
         }
       };
 
-      // PERBAIKAN FUNGSI TANGGAL AGAR TIDAK MUNDUR 1 HARI
+      // FUNGSI PERBAIKAN FORMAT TANGGAL
+      // Mengubah string ISO dari Google Sheets ke Tanggal Lokal Murni tanpa pergeseran Timezone UTC
       const formatCleanDate = (raw) => {
-        if (!raw) return '';
+        if (!raw || raw === '0' || raw === 0 || raw === '-') return '';
         
-        if (typeof raw === 'string') {
-          if (raw.includes('T')) {
-            return raw.split('T')[0];
+        const str = String(raw).trim();
+        
+        // Jika format string ISO dari Google Sheets "YYYY-MM-DDT..."
+        if (str.includes('T')) {
+          const d = new Date(str);
+          if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
           }
-          if (raw.match(/^\d{4}-\d{2}-\d{2}/)) {
-            return raw.substring(0, 10);
-          }
+          return str.split('T')[0];
         }
 
-        const d = new Date(raw);
-        if (isNaN(d.getTime())) return String(raw);
+        // Jika string berformat "YYYY-MM-DD..."
+        if (str.match(/^\d{4}-\d{2}-\d{2}/)) {
+          return str.substring(0, 10);
+        }
+
+        // Jika format bawaan Date lain
+        const d = new Date(str);
+        if (isNaN(d.getTime())) return str;
         
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
         const day = String(d.getDate()).padStart(2, '0');
         
-        return `${year}-${month}-${day}`;
+        return `${y}-${m}-${day}`;
       };
 
       const loadDataFromSheets = () => {
@@ -268,8 +280,16 @@
       }, [currentUser]);
 
       // FORM PEMBELIAN
+      const getTodayFormatted = () => {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
+
       const [formAmbil, setFormAmbil] = useState({
-        tanggal: new Date().toISOString().split('T')[0],
+        tanggal: getTodayFormatted(),
         pengambilSelect: currentUser ? currentUser.nama : 'Andi',
         tempatAmbil: '',
         lokasiAmbil: '',
@@ -282,7 +302,7 @@
       // FORM PENGOLAHAN
       const [formOlah, setFormOlah] = useState({
         selectedTrxIds: [],
-        tanggalOlah: new Date().toISOString().split('T')[0],
+        tanggalOlah: getTodayFormatted(),
         pengolahSelect: currentUser ? currentUser.nama : 'Zaenal',
         jumlahMurni: '',
         biayaOlah: ''
@@ -291,7 +311,7 @@
       // FORM PENJUALAN
       const [formJual, setFormJual] = useState({
         selectedTrxIds: [],
-        tanggalJual: new Date().toISOString().split('T')[0],
+        tanggalJual: getTodayFormatted(),
         hargaJualSatuan: '',
         biayaPenjualan: ''
       });
@@ -396,7 +416,7 @@
         });
 
         sendToGoogleSheets({ action: 'BATCH_UPDATE_OLAH', items: updatedItems }, '🧪 Data Pemurnian berhasil di-update di Sheet Transaksi!');
-        setFormOlah({ selectedTrxIds: [], tanggalOlah: new Date().toISOString().split('T')[0], pengolahSelect: currentUser.nama, jumlahMurni: '', biayaOlah: '' });
+        setFormOlah({ selectedTrxIds: [], tanggalOlah: getTodayFormatted(), pengolahSelect: currentUser.nama, jumlahMurni: '', biayaOlah: '' });
         setActiveTab('dashboard');
       };
 
@@ -427,7 +447,7 @@
         });
 
         sendToGoogleSheets({ action: 'BATCH_UPDATE_PENJUALAN', items: updatedItems }, `💰 Penjualan ${updatedItems.length} barang berhasil dicatat di Sheet Transaksi!`);
-        setFormJual({ selectedTrxIds: [], tanggalJual: new Date().toISOString().split('T')[0], hargaJualSatuan: '', biayaPenjualan: '' });
+        setFormJual({ selectedTrxIds: [], tanggalJual: getTodayFormatted(), hargaJualSatuan: '', biayaPenjualan: '' });
         setActiveTab('dashboard');
       };
 
@@ -503,7 +523,6 @@
           tDate = t.tanggalPenjualan;
         }
 
-        // Jika tidak ada tanggal pada kolom acuan, sembunyikan jika ada filter tanggal
         if (!tDate) {
           if (startDate || endDate) return false;
           return true;
@@ -1248,9 +1267,9 @@
                           filteredTransactions.map((t, idx) => (
                             <tr key={idx} className="hover:bg-slate-50 transition">
                               <td className="px-3 py-3 font-bold text-slate-700">{t.id}</td>
-                              <td className="px-3 py-3">{t.tanggalAmbil}</td>
-                              <td className="px-3 py-3">{t.tanggalOlah || '-'}</td>
-                              <td className="px-3 py-3">{t.tanggalPenjualan || '-'}</td>
+                              <td className="px-3 py-3 font-semibold text-slate-800">{t.tanggalAmbil || '-'}</td>
+                              <td className="px-3 py-3 font-semibold text-slate-800">{t.tanggalOlah || '-'}</td>
+                              <td className="px-3 py-3 font-semibold text-slate-800">{t.tanggalPenjualan || '-'}</td>
                               <td className="px-3 py-3 font-semibold text-slate-600">{t.kategoriName}</td>
                               <td className="px-3 py-3">{t.pengambil}</td>
                               <td className="px-3 py-3">
