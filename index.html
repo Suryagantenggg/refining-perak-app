@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Refining Perak System - Input Tanggal Pengolahan</title>
+  <title>Refining Perak System - Fix Tanggal & Multi-Select</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -186,14 +186,27 @@
         }
       };
 
+      // PERBAIKAN FUNGSI TANGGAL AGAR TIDAK MUNDUR 1 HARI
       const formatCleanDate = (raw) => {
         if (!raw) return '';
-        if (typeof raw === 'string' && raw.includes('T')) {
-          return raw.split('T')[0];
+        
+        if (typeof raw === 'string') {
+          if (raw.includes('T')) {
+            return raw.split('T')[0];
+          }
+          if (raw.match(/^\d{4}-\d{2}-\d{2}/)) {
+            return raw.substring(0, 10);
+          }
         }
+
         const d = new Date(raw);
         if (isNaN(d.getTime())) return String(raw);
-        return d.toISOString().split('T')[0];
+        
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}`;
       };
 
       const loadDataFromSheets = () => {
@@ -265,7 +278,7 @@
         biayaTransport: ''
       });
 
-      // FORM PENGOLAHAN (DENGAN TANGGAL PENGOLAHAN)
+      // FORM PENGOLAHAN (DENGAN INPUT TANGGAL PENGOLAHAN)
       const [formOlah, setFormOlah] = useState({
         selectedTrxIds: [],
         tanggalOlah: new Date().toISOString().split('T')[0],
@@ -449,7 +462,13 @@
         const start = new Date(year, monthIndex, 1);
         const end = new Date(year, monthIndex + 1, 0);
         
-        const formatYYYYMMDD = (d) => d.toISOString().split('T')[0];
+        const formatYYYYMMDD = (d) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+        };
+
         setStartDate(formatYYYYMMDD(start));
         setEndDate(formatYYYYMMDD(end));
       };
